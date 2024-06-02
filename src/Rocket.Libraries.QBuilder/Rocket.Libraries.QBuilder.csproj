@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <Version>6.2.0-beta06</Version>
+    <Version>6.3.0-beta01</Version>
     <PackageId>Rocket.Libraries.QBuilder</PackageId>
     <Product>Rocket.Libraries.QBuilder</Product>
     <AssemblyName>Rocket.Libraries.QBuilder</AssemblyName>

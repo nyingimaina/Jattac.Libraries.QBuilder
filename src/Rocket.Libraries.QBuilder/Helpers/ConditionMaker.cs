@@ -48,19 +48,16 @@ namespace Rocket.Libraries.Qurious.Helpers
 
         public static string GetParameterName(string field, BuiltQuery builtQuery)
         {
-            var parameterName = $"@{field}0";
-            var parameterNameExists = builtQuery.Parameters.ContainsKey(parameterName);
-            if (parameterNameExists)
+            var parameterName = string.Empty;
+            var parameterNameExists = false;
+            var parameterNameIndex = 0;
+            do
             {
-                var parameterNameIndex = 1;
-                while (parameterNameExists)
-                {
-                    parameterName = $"@{field}{parameterNameIndex}";
-                    parameterNameExists = builtQuery.Parameters.ContainsKey(parameterName);
-                    parameterNameIndex++;
-                }
+                parameterName = $"@{field}{parameterNameIndex}";
+                parameterNameExists = builtQuery.Parameters.ContainsKey(parameterName);
+                parameterNameIndex++;
             }
-
+            while (parameterNameExists);
             return parameterName;
         }
 

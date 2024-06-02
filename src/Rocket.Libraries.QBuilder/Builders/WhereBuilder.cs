@@ -110,6 +110,17 @@
 
         public WhereConjuntionBuilder WhereIn<TTable, TValueType>(string field, IEnumerable<TValueType> values)
         {
+            if (values == null)
+            {
+                return _whereConjunctionBuilder;
+            }
+
+            var valuesList = values.ToList();
+            if (!valuesList.Any())
+            {
+                return _whereConjunctionBuilder;
+            }
+
             var criteria = WhereInFilterMaker.GetWhereInSectionArguments(values);
 
             if (string.IsNullOrEmpty(criteria))
@@ -120,9 +131,17 @@
             {
                 if (builtQuery != null)
                 {
-                    var parameterName = ConditionMaker.GetParameterName(field, builtQuery);
-                    builtQuery.Parameters.Add(parameterName, criteria);
-                    return Where<TTable>(field, $" in ({parameterName})");
+                    var whereInCriteria = string.Empty;
+
+                    foreach (var specificValue in values)
+                    {
+                        var parameterName = ConditionMaker.GetParameterName(field, builtQuery);
+                        builtQuery.Parameters.Add(parameterName, specificValue);
+                        whereInCriteria += $"{parameterName}, ";
+                    }
+
+                    whereInCriteria = whereInCriteria.TrimEnd(',', ' ');
+                    return Where<TTable>(field, $" in ({whereInCriteria})");
                 }
                 else
                 {
