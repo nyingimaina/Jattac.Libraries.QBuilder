@@ -1,27 +1,55 @@
-﻿using System;
+using System;
 namespace Rocket.Libraries.Qurious.Helpers
 {
-
     using Rocket.Libraries.Validation.Services;
     using System.Globalization;
 
     internal class ConditionMaker
     {
+        private static readonly FilterOperator[] NoValueOperators =
+        {
+            FilterOperator.IsNull,
+            FilterOperator.IsNotNull,
+        };
 
+        private static bool IsNoValueOperator(FilterOperator op)
+        {
+            foreach (var o in NoValueOperators)
+            {
+                if (o == op) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Builds a WHERE/HAVING condition string for single-value operators.
+        /// For BETWEEN use <see cref="GetBetweenCondition"/>.
+        /// For IS NULL / IS NOT NULL pass <c>value = null</c>.
+        /// </summary>
         public string GetCondition(string field, FilterOperator op, object value, BuiltQuery builtQuery = null)
         {
-            new DataValidator().EvaluateImmediate(value == null, $"No value was provided for filter");
+            if (!IsNoValueOperator(op))
+            {
+                new DataValidator().EvaluateImmediate(value == null, "No value was provided for filter");
+            }
+
             var sqlOperator = GetSqlOperator(op);
+
+            if (IsNoValueOperator(op))
+            {
+                return $" {sqlOperator}";
+            }
+
             var conditionTemplate = GetConditionTemplate(op);
             var condition = string.Empty;
+
             if (builtQuery == null)
             {
                 condition = $" {sqlOperator} {string.Format(CultureInfo.InvariantCulture, conditionTemplate, value)}";
             }
             else
             {
-                conditionTemplate = conditionTemplate.Replace("'", string.Empty)
-                .Replace("%", string.Empty);
+                conditionTemplate = conditionTemplate.Replace("'", string.Empty).Replace("%", string.Empty);
                 var parameterName = GetParameterName(field, builtQuery);
                 condition = $" {sqlOperator} {string.Format(CultureInfo.InvariantCulture, conditionTemplate, parameterName)}";
 
@@ -43,25 +71,46 @@ namespace Rocket.Libraries.Qurious.Helpers
 
                 builtQuery.Parameters.Add(parameterName, getEffectiveValue());
             }
+
             return condition;
+        }
+
+        /// <summary>
+        /// Builds a BETWEEN / NOT BETWEEN condition, handling parameterization for two values.
+        /// </summary>
+        public string GetBetweenCondition(string field, bool negate, object from, object to, BuiltQuery builtQuery = null)
+        {
+            new DataValidator()
+                .AddFailureCondition(from == null, "No 'from' value provided for BETWEEN filter", false)
+                .AddFailureCondition(to == null, "No 'to' value provided for BETWEEN filter", false)
+                .ThrowExceptionOnInvalidRules();
+
+            var keyword = negate ? "Not Between" : "Between";
+
+            if (builtQuery == null)
+            {
+                return $" {keyword} '{from}' And '{to}'";
+            }
+
+            var fromParam = GetParameterName(field, builtQuery);
+            builtQuery.Parameters.Add(fromParam, from.ToString());
+            var toParam = GetParameterName(field, builtQuery);
+            builtQuery.Parameters.Add(toParam, to.ToString());
+            return $" {keyword} {fromParam} And {toParam}";
         }
 
         public static string GetParameterName(string field, BuiltQuery builtQuery)
         {
-            var parameterName = string.Empty;
-            var parameterNameExists = false;
             var parameterNameIndex = 0;
+            string parameterName;
             do
             {
                 parameterName = $"@{field}{parameterNameIndex}";
-                parameterNameExists = builtQuery.Parameters.ContainsKey(parameterName);
                 parameterNameIndex++;
             }
-            while (parameterNameExists);
+            while (builtQuery.Parameters.ContainsKey(parameterName));
             return parameterName;
         }
-
-
 
         private string GetConditionTemplate(FilterOperator op)
         {
@@ -72,31 +121,21 @@ namespace Rocket.Libraries.Qurious.Helpers
                     return string.Empty;
 
                 case FilterOperator.LessThan:
-                    return "'{0}'";
-
                 case FilterOperator.LessThanOrEqualTo:
-                    return "'{0}'";
-
                 case FilterOperator.EqualTo:
-                    return "'{0}'";
-
                 case FilterOperator.GreaterThanOrEqualTo:
-                    return "'{0}'";
-
                 case FilterOperator.GreaterThan:
-                    return "'{0}'";
-
                 case FilterOperator.NotEqualTo:
                     return "'{0}'";
 
                 case FilterOperator.StartsWith:
-                    return "'%{0}'";
+                    return "'{0}%'";
 
                 case FilterOperator.Contains:
                     return "'%{0}%'";
 
                 case FilterOperator.EndsWith:
-                    return "'{0}%'";
+                    return "'%{0}'";
             }
         }
 
@@ -108,28 +147,17 @@ namespace Rocket.Libraries.Qurious.Helpers
                     new DataValidator().EvaluateImmediate(true, $"Unknown operator '{op}'. Cannot build filter");
                     return string.Empty;
 
-                case FilterOperator.LessThan:
-                    return "<";
-
-                case FilterOperator.LessThanOrEqualTo:
-                    return "<=";
-
-                case FilterOperator.EqualTo:
-                    return "=";
-
-                case FilterOperator.GreaterThanOrEqualTo:
-                    return ">=";
-
-                case FilterOperator.GreaterThan:
-                    return ">";
-
-                case FilterOperator.NotEqualTo:
-                    return "<>";
-
+                case FilterOperator.LessThan:            return "<";
+                case FilterOperator.LessThanOrEqualTo:   return "<=";
+                case FilterOperator.EqualTo:             return "=";
+                case FilterOperator.GreaterThanOrEqualTo: return ">=";
+                case FilterOperator.GreaterThan:         return ">";
+                case FilterOperator.NotEqualTo:          return "<>";
                 case FilterOperator.StartsWith:
                 case FilterOperator.Contains:
-                case FilterOperator.EndsWith:
-                    return "Like";
+                case FilterOperator.EndsWith:            return "Like";
+                case FilterOperator.IsNull:              return "IS NULL";
+                case FilterOperator.IsNotNull:           return "IS NOT NULL";
             }
         }
     }

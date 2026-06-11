@@ -1,16 +1,16 @@
 ﻿namespace Rocket.Libraries.Qurious.Builders
 {
-    public class WhereConjuntionBuilder : BuilderBase
+    public class WhereConjunctionBuilder : BuilderBase
     {
         private readonly WhereBuilder _whereBuilder;
 
-        public WhereConjuntionBuilder(WhereBuilder whereBuilder, QBuilder qBuilder)
+        public WhereConjunctionBuilder(WhereBuilder whereBuilder, QBuilder qBuilder)
             : this(qBuilder)
         {
             _whereBuilder = whereBuilder;
         }
 
-        public WhereConjuntionBuilder(QBuilder qBuilder)
+        public WhereConjunctionBuilder(QBuilder qBuilder)
             : base(qBuilder)
         {
         }
@@ -39,13 +39,13 @@
             return QBuilder.UseTableBoundFilter<TTable>();
         }
 
-        public WhereConjuntionBuilder OpenParentheses()
+        public WhereConjunctionBuilder OpenParentheses()
         {
             _whereBuilder.OpenParentheses();
             return this;
         }
 
-        public WhereConjuntionBuilder CloseParentheses()
+        public WhereConjunctionBuilder CloseParentheses()
         {
             _whereBuilder.CloseParentheses();
             return this;

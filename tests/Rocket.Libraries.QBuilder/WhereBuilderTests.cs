@@ -1,10 +1,5 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Xunit;
-using Moq;
-using Rocket.Libraries.Qurious.Builders;
 using Rocket.Libraries.Qurious;
 
 namespace Rocket.Libraries.QuriousTests
@@ -31,7 +26,9 @@ namespace Rocket.Libraries.QuriousTests
 
             var result = qBuilder.BuildWithParameters();
             var parameterName = "@Name0";
-            Assert.Equal($"Select * from (Select \ntTestTable.Id From TestTable tTestTable\nWhere tTestTable.Name  = '{parameterName}'\n) as t", result.ParameterizedSql);
+            var normalized = result.ParameterizedSql.Replace("\r\n", "\n").Replace("\r", "\n");
+            // Parameterized SQL uses bare @param names — no quotes around the placeholder
+            Assert.Equal($"Select * from (Select \ntTestTable.Id From TestTable tTestTable\nWhere tTestTable.Name  = {parameterName}\n) as t", normalized);
         }
 
         [Fact]
@@ -47,7 +44,8 @@ namespace Rocket.Libraries.QuriousTests
 
             var result = qBuilder.Build();
             var value = "TestName";
-            Assert.Equal($"Select * from (Select \ntTestTable.Id From TestTable tTestTable\nWhere tTestTable.Name  = '{value}'\n) as t", result);
+            var normalized = result.Replace("\r\n", "\n").Replace("\r", "\n");
+            Assert.Equal($"Select * from (Select \ntTestTable.Id From TestTable tTestTable\nWhere tTestTable.Name  = '{value}'\n) as t", normalized);
         }
     }
 }

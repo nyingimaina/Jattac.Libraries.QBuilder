@@ -19,42 +19,42 @@ namespace Rocket.Libraries.Qurious.Builders
             _fieldNameResolver = new FieldNameResolver();
         }
 
-        public WhereConjuntionBuilder Where(FilterDescription<TTable> filterDescription)
+        public WhereConjunctionBuilder Where(FilterDescription<TTable> filterDescription)
         {
             return _whereBuilder.Where(filterDescription);
         }
 
-        public WhereConjuntionBuilder Where<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, string condition)
+        public WhereConjunctionBuilder Where<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, string condition)
         {
             var fieldName = _fieldNameResolver.GetFieldName(fieldNameDescriptor);
             return _whereBuilder.Where<TTable>(fieldName, condition);
         }
 
-        public WhereConjuntionBuilder Where<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, FilterOperator op, object value)
+        public WhereConjunctionBuilder Where<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, FilterOperator op, object value)
         {
             var fieldName = _fieldNameResolver.GetFieldName(fieldNameDescriptor);
             return _whereBuilder.Where<TTable>(fieldName, op, value);
         }
 
-        public WhereConjuntionBuilder WhereIn<TField, TValueType>(Expression<Func<TTable, TField>> fieldNameDescriptor, List<TValueType> values)
+        public WhereConjunctionBuilder WhereIn<TField, TValueType>(Expression<Func<TTable, TField>> fieldNameDescriptor, IEnumerable<TValueType> values)
         {
             var fieldName = _fieldNameResolver.GetFieldName(fieldNameDescriptor);
             return _whereBuilder.WhereIn<TTable, TValueType>(fieldName, values);
         }
 
-        public WhereConjuntionBuilder WhereNotIn<TField, TValueType>(Expression<Func<TTable, TField>> fieldNameDescriptor, List<TValueType> values)
+        public WhereConjunctionBuilder WhereNotIn<TField, TValueType>(Expression<Func<TTable, TField>> fieldNameDescriptor, IEnumerable<TValueType> values)
         {
             var fieldName = _fieldNameResolver.GetFieldName(fieldNameDescriptor);
             return _whereBuilder.WhereNotIn<TTable, TValueType>(fieldName, values);
         }
 
-        public WhereConjuntionBuilder OptionalWhere<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, Func<string> fnResolveCondition)
+        public WhereConjunctionBuilder OptionalWhere<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, Func<string> fnResolveCondition)
         {
             var fieldName = _fieldNameResolver.GetFieldName(fieldNameDescriptor);
             return _whereBuilder.OptionalWhere<TTable>(fieldName, fnResolveCondition);
         }
 
-        public WhereConjuntionBuilder WhereExplicitly(string criteria)
+        public WhereConjunctionBuilder WhereExplicitly(string criteria)
         {
             return _whereBuilder.WhereExplicitly(criteria);
         }
@@ -71,47 +71,47 @@ namespace Rocket.Libraries.Qurious.Builders
             return this;
         }
 
-        public WhereConjuntionBuilder WhereEqualTo<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereEqualTo<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.EqualTo, value);
         }
 
-        public WhereConjuntionBuilder WhereLessThan<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereLessThan<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.LessThan, value);
         }
 
-        public WhereConjuntionBuilder WhereLessThanOrEqualTo<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereLessThanOrEqualTo<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.LessThanOrEqualTo, value);
         }
 
-        public WhereConjuntionBuilder WhereGreaterThan<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereGreaterThan<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.GreaterThan, value);
         }
 
-        public WhereConjuntionBuilder WhereGreaterThanOrEqualTo<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereGreaterThanOrEqualTo<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.GreaterThanOrEqualTo, value);
         }
 
-        public WhereConjuntionBuilder WhereStartsWith<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereStartsWith<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.StartsWith, value);
         }
 
-        public WhereConjuntionBuilder WhereContains<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereContains<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.Contains, value);
         }
 
-        public WhereConjuntionBuilder WhereEndsWith<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereEndsWith<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.EndsWith, value);
         }
 
-        public WhereConjuntionBuilder WhereNotEqualTo<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
+        public WhereConjunctionBuilder WhereNotEqualTo<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor, object value)
         {
             return Where(fieldNameDescriptor, FilterOperator.NotEqualTo, value);
         }

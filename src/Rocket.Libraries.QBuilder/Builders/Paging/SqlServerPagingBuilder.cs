@@ -22,7 +22,7 @@
                 .AddFailureCondition(page < 1, $"Database query requested for page '{page}'. Pages must be greater than or equal to 1", false)
                 .AddFailureCondition(pageSize < 1, $"Pages must have at least one record. Page size '{pageSize}' is not valid", false)
                 .ThrowExceptionOnInvalidRules();
-            const string rowNumber = "RowNumber";
+            const string rowNumber = "__qb_rn__";
             string orderSuffix = orderAscending ? "Asc" : "Desc";
             var fieldName = new FieldNameResolver().GetFieldName(fieldNameDescriber);
             var table = QBuilder.TableNameAliaser.GetTableAlias<TTable>();
