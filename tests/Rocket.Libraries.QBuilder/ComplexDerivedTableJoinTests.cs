@@ -14,7 +14,7 @@ namespace Rocket.Libraries.QuriousTests
         public void ItDoesComplexJoins()
         {
             var taskExecutionHistoryQBuilder = TaskHistoryQBuilder();
-            var query = new QBuilder("f")
+            var query = new QBuilder("f", parameterize: false)
                 .UseTableBoundSelector<Schedule>()
                 .Select(schedule => schedule.NextRunTime)
                 .Then()
@@ -44,7 +44,7 @@ namespace Rocket.Libraries.QuriousTests
         private QBuilder TaskHistoryQBuilder()
         {
             const string latestCompletion = "LatestCompletion";
-            var innerQbuilder = new QBuilder()
+            var innerQbuilder = new QBuilder(parameterize: false)
                 .UseTableBoundSelector<TaskExecutionHistory>()
                 .SelectAggregated(taskExecutionHistory => taskExecutionHistory.EndTime, latestCompletion, "Max")
                 .Select(taskExecutionHistory => taskExecutionHistory.TaskDefinitionId)
@@ -52,7 +52,7 @@ namespace Rocket.Libraries.QuriousTests
                 .UseTableBoundGrouper<TaskExecutionHistory>()
                 .GroupBy(taskExecutionHistory => taskExecutionHistory.TaskDefinitionId);
 
-            var outerQbuilder = new QBuilder(TaskHistoryAlias)
+            var outerQbuilder = new QBuilder(TaskHistoryAlias, parameterize: false)
                 .UseTableBoundSelector<TaskExecutionHistory>()
                 .Select(taskExecutionHistory => taskExecutionHistory.EndTime)
                 .Select(taskExecutionHistory => taskExecutionHistory.Id)

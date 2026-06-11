@@ -84,6 +84,18 @@
             return this;
         }
 
+        /// <summary>
+        /// Adds a <c>CASE WHEN … END AS alias</c> expression to the SELECT list.
+        /// Use <see cref="CaseWhenBuilder"/> to construct the expression.
+        /// </summary>
+        /// <param name="caseWhen">A <see cref="CaseWhenBuilder"/> that has at least one When/Then pair.</param>
+        /// <param name="alias">The column alias for the CASE expression in the result set.</param>
+        public SelectBuilder SelectCaseWhen(CaseWhenBuilder caseWhen, string alias)
+        {
+            var sql = caseWhen.Build();
+            return SelectExplicit(string.Empty, sql, alias, string.Empty, preventTableNameAliasing: true, qualifyFieldWithTableName: false);
+        }
+
         public SelectBuilder SelectDistinctRows()
         {
             _distinctRows = true;

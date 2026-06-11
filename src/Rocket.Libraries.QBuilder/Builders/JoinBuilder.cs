@@ -48,7 +48,7 @@
 
         public JoinBuilder InnerJoin<TLeftTable, TLeftField, TRightTable, TRightField>(Expression<Func<TLeftTable, TLeftField>> leftFieldNameDescriptor, Expression<Func<TRightTable, TRightField>> rightFieldNameDescriptor, string joinType)
         {
-            QueueJoin(leftFieldNameDescriptor, rightFieldNameDescriptor, JoinTypes.Inner);
+            QueueJoin(leftFieldNameDescriptor, rightFieldNameDescriptor, joinType);
             return this;
         }
 
@@ -78,6 +78,23 @@
         public JoinBuilder RightJoin<TLeftTable, TRightTable>(string leftField, string rightField)
         {
             QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.RightJoin);
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a CROSS JOIN between two tables, producing the Cartesian product of their rows.
+        /// No ON condition is required or emitted.
+        /// </summary>
+        /// <typeparam name="TLeftTable">The left (driving) table.</typeparam>
+        /// <typeparam name="TRightTable">The right table to cross-join with.</typeparam>
+        public JoinBuilder CrossJoin<TLeftTable, TRightTable>()
+        {
+            Joins.Add(new JoinDescription
+            {
+                LeftTable = QBuilder.TableNameResolver(typeof(TLeftTable)),
+                RightTable = QBuilder.TableNameResolver(typeof(TRightTable)),
+                JoinType = JoinTypes.Cross,
+            });
             return this;
         }
 
@@ -203,7 +220,7 @@
         {
             var leftField = _fieldNameResolver.GetFieldName(leftFieldNameDescriptor);
             var rightField = _fieldNameResolver.GetFieldName(rightFieldNameDescriptor);
-            QueueJoin<TRightField, TLeftTable>(leftField, rightField, joinType);
+            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, joinType);
         }
 
         private void QueueJoin<TLeftTable, TRightTable>(string leftField, string rightField, string joinType)
@@ -291,6 +308,14 @@
 
         private string GetNonDerivedTableJoinLine(JoinDescription joinDescription)
         {
+            var isCrossJoin = joinDescription.JoinType == JoinTypes.Cross;
+            if (isCrossJoin)
+            {
+                var leftAlias = QBuilder.TableNameAliaser.GetTableAlias(joinDescription.LeftTable);
+                var rightAlias = QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
+                return $"Cross join {joinDescription.LeftTable} {leftAlias}{Environment.NewLine}";
+            }
+
             FlipTablesIfLeftTableAlreadyAliased(joinDescription);
             var joinPrefix = GetJoinPrefix(joinDescription);
             var rightTableAlias = QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
@@ -329,6 +354,9 @@
 
                 case JoinTypes.LeftJoin:
                     return "Left ";
+
+                case JoinTypes.Cross:
+                    return "Cross ";
             }
             return string.Empty;
         }

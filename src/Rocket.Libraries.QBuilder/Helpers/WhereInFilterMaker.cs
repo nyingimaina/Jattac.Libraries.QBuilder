@@ -6,27 +6,30 @@ namespace Rocket.Libraries.Qurious.Helpers
 {
     internal static class WhereInFilterMaker
     {
-        public static string GetWhereInSectionArguments<TValueType>(List<TValueType> values)
+        public static string GetWhereInSectionArguments<TValueType>(IEnumerable<TValueType> values)
         {
             if (values == null)
             {
-                throw new Exception("Cannot build a where clause from an null list of values");
+                throw new ArgumentNullException(nameof(values), "Cannot build a where clause from a null list of values");
             }
 
-            if (values.Count == 0)
+            var valuesToList = new List<TValueType>(values);
+
+            if (valuesToList.Count == 0)
             {
-                throw new Exception("No list of values provided. Exception is being thrown, as this condition is ambiguous, and going ahead would likely produce an unpredictable result.");
+                throw new ArgumentException("No list of values provided. This condition is ambiguous and would produce unpredictable results.", nameof(values));
             }
 
-            using(var uniqueValueResolver = new UniqueValueResolver<TValueType>())
+            using (var uniqueValueResolver = new UniqueValueResolver<TValueType>())
             {
-                values = uniqueValueResolver.GetUnique(values);
+                values = uniqueValueResolver.GetUnique(valuesToList);
             }
 
             var args = string.Empty;
             foreach (var value in values)
             {
-                args += $",'{value}'";
+                var escaped = value?.ToString()?.Replace("'", "''") ?? string.Empty;
+                args += $",'{escaped}'";
             }
 
             args = $"({args.Substring(1)})";

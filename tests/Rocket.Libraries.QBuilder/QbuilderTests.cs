@@ -9,7 +9,7 @@ namespace Rocket.Libraries.QuriousTests
         [Fact]
         public void DerivedTableJoinsWorkFine()
         {
-            var derivedQuery = new QBuilder("derived")
+            var derivedQuery = new QBuilder("derived", parameterize: false)
                 .UseTableBoundSelector<WorkflowInstanceState>()
                 .SelectAggregated(t => t.Created, "Created", "Max")
                 .Select(t => t.WorkflowInstanceId)
@@ -17,7 +17,7 @@ namespace Rocket.Libraries.QuriousTests
                 .UseTableBoundGrouper<WorkflowInstanceState>()
                 .Then();
 
-            var query = new QBuilder("t")
+            var query = new QBuilder("t", parameterize: false)
                 .UseTableBoundSelector<WorkflowInstance>()
                 .Select(t => t.Id)
                 .Then()
@@ -35,7 +35,7 @@ namespace Rocket.Libraries.QuriousTests
         [Fact]
         public void NonDerivedTableJoinsWorkFine()
         {
-            var query = new QBuilder("t")
+            var query = new QBuilder("t", parameterize: false)
                 .UseTableBoundSelector<WorkflowInstance>()
                 .Select(t => t.Id)
                 .Then()

@@ -14,7 +14,7 @@
         [Fact]
         public void SqlServerPagingIsDoneCorrectly()
         {
-            var query = new QBuilder()
+            var query = new QBuilder(parameterize: false)
                 .UseTableBoundSelector<User>()
                 .Select(a => a.Id)
                 .Then()
@@ -27,7 +27,7 @@
                 .PageBy(a => a.Name, 1, 4)
                 .Build();
 
-            var x = 9;
+            _ = 9;
         }
 
         [Theory]

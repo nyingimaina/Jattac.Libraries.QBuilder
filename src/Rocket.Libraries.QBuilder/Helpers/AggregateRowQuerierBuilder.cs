@@ -50,7 +50,7 @@
             {
                 if (_innerQBuilder == null)
                 {
-                    _innerQBuilder = new QBuilder(_tableNameResolver, _aliasTablename);
+                    _innerQBuilder = new QBuilder(_tableNameResolver, _aliasTablename, false);
                 }
 
                 return _innerQBuilder;
@@ -63,7 +63,7 @@
             {
                 if (_resultQbuilder == null)
                 {
-                    _resultQbuilder = new QBuilder(_tableNameResolver, _aliasTablename);
+                    _resultQbuilder = new QBuilder(_tableNameResolver, _aliasTablename, false);
                 }
 
                 return _resultQbuilder;
