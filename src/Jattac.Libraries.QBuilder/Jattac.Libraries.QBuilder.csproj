@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <Version>7.0.0-beta01</Version>
+    <Version>7.0.0-rc1</Version>
     <PackageId>Jattac.Libraries.QBuilder</PackageId>
     <Product>Jattac.Libraries.QBuilder</Product>
     <AssemblyName>Jattac.Libraries.QBuilder</AssemblyName>
@@ -24,7 +24,7 @@
     <PackageDescription>A fully-fledged C# dialect of SQL — a fluent, type-safe query builder for .NET covering every ANSI SQL clause plus SQL Server and MariaDB/MySQL dialects. Produces parameterized SQL strings you execute with Dapper, ADO.NET, or any micro-ORM. Zero boilerplate, injection-safe, 97 unit tests.</PackageDescription>
     <PackageTags>sql;query-builder;dapper;fluent;orm;linq;select;join;where;cte;paging;parameterized;mysql;sqlserver;mariadb</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v7.0.0-beta01 — Full SQL fluent API: UNION/INTERSECT/EXCEPT, CTEs, CASE WHEN, EXISTS, BETWEEN, IS NULL, paging (ROW_NUMBER, OFFSET/FETCH, LIMIT/OFFSET), all 5 JOIN types, GROUP BY, HAVING, ORDER BY, and parameterization throughout. See https://github.com/nyingimaina/Jattac.Libraries.QBuilder/blob/master/CHANGELOG.md for full details.</PackageReleaseNotes>
+    <PackageReleaseNotes>v7.0.0-rc1 — Full SQL fluent API: Q.New() entry point (renamed from Q.Build()), optional self-join alias support on all clauses, UNION/INTERSECT/EXCEPT, CTEs, CASE WHEN, EXISTS, BETWEEN, IS NULL, paging (ROW_NUMBER, OFFSET/FETCH, LIMIT/OFFSET), all 5 JOIN types, GROUP BY, HAVING, ORDER BY, and parameterization throughout. See https://github.com/nyingimaina/Jattac.Libraries.QBuilder/blob/master/CHANGELOG.md for full details.</PackageReleaseNotes>
     <Copyright>Copyright © 2024 Nyingi Maina</Copyright>
   </PropertyGroup>
 
