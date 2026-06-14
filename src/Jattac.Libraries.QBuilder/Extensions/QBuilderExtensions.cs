@@ -25,12 +25,14 @@ namespace Jattac.Libraries.QBuilder
         /// <typeparam name="TField">The field type.</typeparam>
         /// <param name="qb">The query builder.</param>
         /// <param name="fieldSelector">Lambda selecting the column, e.g. <c>u => u.Name</c>.</param>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins). Use as a named argument to avoid ambiguity with the column-alias overload.</param>
         /// <returns>The same <see cref="QBuilder"/> for chaining.</returns>
         public static QBuilder Select<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
-            qb.UseSelector().Select<TTable, TField>(fieldSelector);
+            qb.UseSelector().Select<TTable, TField>(fieldSelector, explicitTableAlias: tableAlias);
             return qb;
         }
 
@@ -42,13 +44,15 @@ namespace Jattac.Libraries.QBuilder
         /// <param name="qb">The query builder.</param>
         /// <param name="fieldSelector">Lambda selecting the column, e.g. <c>o => o.Amount</c>.</param>
         /// <param name="alias">The column alias in the result set.</param>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         /// <returns>The same <see cref="QBuilder"/> for chaining.</returns>
         public static QBuilder Select<TTable, TField>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
-            string alias)
+            string alias,
+            string tableAlias = null)
         {
-            qb.UseSelector().Select<TTable, TField>(fieldSelector, alias);
+            qb.UseSelector().Select<TTable, TField>(fieldSelector, alias, tableAlias);
             return qb;
         }
 
@@ -61,12 +65,14 @@ namespace Jattac.Libraries.QBuilder
         /// <param name="fieldSelector">Lambda selecting the column to aggregate.</param>
         /// <param name="alias">Column alias for the aggregate result.</param>
         /// <param name="function">The aggregate function to apply.</param>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         /// <returns>The same <see cref="QBuilder"/> for chaining.</returns>
         public static QBuilder Aggregate<TTable, TField>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
             string alias,
-            AggregateFunction function)
+            AggregateFunction function,
+            string tableAlias = null)
         {
             var fnSql = function switch
             {
@@ -82,12 +88,12 @@ namespace Jattac.Libraries.QBuilder
             if (function == AggregateFunction.CountDistinct)
             {
                 var fieldName = new FieldNameResolver().GetFieldName(fieldSelector);
-                var table = qb.TableNameAliaser.GetTableAlias<TTable>();
+                var table = tableAlias ?? qb.TableNameAliaser.GetTableAlias<TTable>();
                 qb.UseSelector().SelectExplicit(string.Empty, $"Count(Distinct {table}.{fieldName})", alias, string.Empty, preventTableNameAliasing: true, qualifyFieldWithTableName: false);
             }
             else
             {
-                qb.UseSelector().SelectAggregated<TTable, TField>(fieldSelector, alias, fnSql);
+                qb.UseSelector().SelectAggregated<TTable, TField>(fieldSelector, alias, fnSql, tableAlias);
             }
 
             return qb;
@@ -142,13 +148,17 @@ namespace Jattac.Libraries.QBuilder
         /// <param name="qb">The query builder.</param>
         /// <param name="leftField">Lambda selecting the join key on the left table, e.g. <c>u => u.Id</c>.</param>
         /// <param name="rightField">Lambda selecting the join key on the right table, e.g. <c>o => o.UserId</c>.</param>
+        /// <param name="leftAlias">Optional alias for the left table instance (required for self-joins).</param>
+        /// <param name="rightAlias">Optional alias for the right table instance (required for self-joins).</param>
         /// <returns>The same <see cref="QBuilder"/> for chaining.</returns>
         public static QBuilder InnerJoin<TLeft, TRight, TLeftField, TRightField>(
             this QBuilder qb,
             Expression<Func<TLeft, TLeftField>> leftField,
-            Expression<Func<TRight, TRightField>> rightField)
+            Expression<Func<TRight, TRightField>> rightField,
+            string leftAlias = null,
+            string rightAlias = null)
         {
-            qb.UseTableBoundJoinBuilder<TLeft, TRight>().InnerJoin(leftField, rightField);
+            qb.UseTableBoundJoinBuilder<TLeft, TRight>().InnerJoin(leftField, rightField, leftAlias, rightAlias);
             return qb;
         }
 
@@ -157,12 +167,16 @@ namespace Jattac.Libraries.QBuilder
         /// Rows from <typeparamref name="TLeft"/> that have no matching row in <typeparamref name="TRight"/>
         /// are included with NULL values for <typeparamref name="TRight"/> columns.
         /// </summary>
+        /// <param name="leftAlias">Optional alias for the left table instance (required for self-joins).</param>
+        /// <param name="rightAlias">Optional alias for the right table instance (required for self-joins).</param>
         public static QBuilder LeftJoin<TLeft, TRight, TLeftField, TRightField>(
             this QBuilder qb,
             Expression<Func<TLeft, TLeftField>> leftField,
-            Expression<Func<TRight, TRightField>> rightField)
+            Expression<Func<TRight, TRightField>> rightField,
+            string leftAlias = null,
+            string rightAlias = null)
         {
-            qb.UseTableBoundJoinBuilder<TLeft, TRight>().LeftJoin(leftField, rightField);
+            qb.UseTableBoundJoinBuilder<TLeft, TRight>().LeftJoin(leftField, rightField, leftAlias, rightAlias);
             return qb;
         }
 
@@ -170,12 +184,16 @@ namespace Jattac.Libraries.QBuilder
         /// Adds a RIGHT JOIN between <typeparamref name="TLeft"/> and <typeparamref name="TRight"/>.
         /// All rows from <typeparamref name="TRight"/> are returned, with NULLs for unmatched <typeparamref name="TLeft"/> columns.
         /// </summary>
+        /// <param name="leftAlias">Optional alias for the left table instance (required for self-joins).</param>
+        /// <param name="rightAlias">Optional alias for the right table instance (required for self-joins).</param>
         public static QBuilder RightJoin<TLeft, TRight, TLeftField, TRightField>(
             this QBuilder qb,
             Expression<Func<TLeft, TLeftField>> leftField,
-            Expression<Func<TRight, TRightField>> rightField)
+            Expression<Func<TRight, TRightField>> rightField,
+            string leftAlias = null,
+            string rightAlias = null)
         {
-            qb.UseTableBoundJoinBuilder<TLeft, TRight>().RightJoin(leftField, rightField);
+            qb.UseTableBoundJoinBuilder<TLeft, TRight>().RightJoin(leftField, rightField, leftAlias, rightAlias);
             return qb;
         }
 
@@ -183,12 +201,16 @@ namespace Jattac.Libraries.QBuilder
         /// Adds a FULL OUTER JOIN between <typeparamref name="TLeft"/> and <typeparamref name="TRight"/>.
         /// All rows from both tables are returned; unmatched sides are filled with NULLs.
         /// </summary>
+        /// <param name="leftAlias">Optional alias for the left table instance (required for self-joins).</param>
+        /// <param name="rightAlias">Optional alias for the right table instance (required for self-joins).</param>
         public static QBuilder FullOuterJoin<TLeft, TRight, TLeftField, TRightField>(
             this QBuilder qb,
             Expression<Func<TLeft, TLeftField>> leftField,
-            Expression<Func<TRight, TRightField>> rightField)
+            Expression<Func<TRight, TRightField>> rightField,
+            string leftAlias = null,
+            string rightAlias = null)
         {
-            qb.UseTableBoundJoinBuilder<TLeft, TRight>().FullJoin(leftField, rightField);
+            qb.UseTableBoundJoinBuilder<TLeft, TRight>().FullJoin(leftField, rightField, leftAlias, rightAlias);
             return qb;
         }
 
@@ -214,15 +236,17 @@ namespace Jattac.Libraries.QBuilder
         /// <param name="fieldSelector">Lambda selecting the column.</param>
         /// <param name="op">Comparison operator.</param>
         /// <param name="value">Value to compare against. May be <c>null</c> for <see cref="FilterOperator.IsNull"/> / <see cref="FilterOperator.IsNotNull"/>.</param>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         /// <returns>The same <see cref="QBuilder"/> for chaining.</returns>
         public static QBuilder Where<TTable, TField>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
             FilterOperator op,
-            object value = null)
+            object value = null,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().Where<TTable>(field, op, value);
+            qb.UseFilter().Where<TTable>(field, op, value, tableAlias);
             return qb;
         }
 
@@ -231,10 +255,11 @@ namespace Jattac.Libraries.QBuilder
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
             FilterOperator op,
-            object value = null)
+            object value = null,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().UseConjunction().And().Where<TTable>(field, op, value);
+            qb.UseFilter().UseConjunction().And().Where<TTable>(field, op, value, tableAlias);
             return qb;
         }
 
@@ -243,54 +268,61 @@ namespace Jattac.Libraries.QBuilder
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
             FilterOperator op,
-            object value = null)
+            object value = null,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().UseConjunction().Or().Where<TTable>(field, op, value);
+            qb.UseFilter().UseConjunction().Or().Where<TTable>(field, op, value, tableAlias);
             return qb;
         }
 
         /// <summary>
         /// Adds a WHERE <c>field IS NULL</c> predicate.
         /// </summary>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         public static QBuilder WhereIsNull<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().WhereIsNull<TTable>(field);
+            qb.UseFilter().WhereIsNull<TTable>(field, tableAlias);
             return qb;
         }
 
         /// <summary>Appends an AND WHERE <c>field IS NULL</c> predicate.</summary>
         public static QBuilder AndWhereIsNull<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().UseConjunction().And().WhereIsNull<TTable>(field);
+            qb.UseFilter().UseConjunction().And().WhereIsNull<TTable>(field, tableAlias);
             return qb;
         }
 
         /// <summary>
         /// Adds a WHERE <c>field IS NOT NULL</c> predicate.
         /// </summary>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         public static QBuilder WhereIsNotNull<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().WhereIsNotNull<TTable>(field);
+            qb.UseFilter().WhereIsNotNull<TTable>(field, tableAlias);
             return qb;
         }
 
         /// <summary>Appends an AND WHERE <c>field IS NOT NULL</c> predicate.</summary>
         public static QBuilder AndWhereIsNotNull<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().UseConjunction().And().WhereIsNotNull<TTable>(field);
+            qb.UseFilter().UseConjunction().And().WhereIsNotNull<TTable>(field, tableAlias);
             return qb;
         }
 
@@ -299,14 +331,16 @@ namespace Jattac.Libraries.QBuilder
         /// </summary>
         /// <param name="from">Inclusive lower bound.</param>
         /// <param name="to">Inclusive upper bound.</param>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         public static QBuilder WhereBetween<TTable, TField>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
             object from,
-            object to)
+            object to,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().WhereBetween<TTable>(field, from, to);
+            qb.UseFilter().WhereBetween<TTable>(field, from, to, tableAlias);
             return qb;
         }
 
@@ -315,10 +349,11 @@ namespace Jattac.Libraries.QBuilder
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
             object from,
-            object to)
+            object to,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().UseConjunction().And().WhereBetween<TTable>(field, from, to);
+            qb.UseFilter().UseConjunction().And().WhereBetween<TTable>(field, from, to, tableAlias);
             return qb;
         }
 
@@ -326,13 +361,15 @@ namespace Jattac.Libraries.QBuilder
         /// Adds a WHERE <c>field IN (values)</c> predicate.
         /// Silently no-ops when <paramref name="values"/> is null or empty.
         /// </summary>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         public static QBuilder WhereIn<TTable, TField, TValue>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
-            IEnumerable<TValue> values)
+            IEnumerable<TValue> values,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().WhereIn<TTable, TValue>(field, values);
+            qb.UseFilter().WhereIn<TTable, TValue>(field, values, tableAlias);
             return qb;
         }
 
@@ -340,10 +377,11 @@ namespace Jattac.Libraries.QBuilder
         public static QBuilder AndWhereIn<TTable, TField, TValue>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
-            IEnumerable<TValue> values)
+            IEnumerable<TValue> values,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().UseConjunction().And().WhereIn<TTable, TValue>(field, values);
+            qb.UseFilter().UseConjunction().And().WhereIn<TTable, TValue>(field, values, tableAlias);
             return qb;
         }
 
@@ -351,13 +389,15 @@ namespace Jattac.Libraries.QBuilder
         /// Adds a WHERE <c>field NOT IN (values)</c> predicate.
         /// Silently no-ops when <paramref name="values"/> is null or empty.
         /// </summary>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         public static QBuilder WhereNotIn<TTable, TField, TValue>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
-            IEnumerable<TValue> values)
+            IEnumerable<TValue> values,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().WhereNotIn<TTable, TValue>(field, values);
+            qb.UseFilter().WhereNotIn<TTable, TValue>(field, values, tableAlias);
             return qb;
         }
 
@@ -365,10 +405,11 @@ namespace Jattac.Libraries.QBuilder
         public static QBuilder AndWhereNotIn<TTable, TField, TValue>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
-            IEnumerable<TValue> values)
+            IEnumerable<TValue> values,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseFilter().UseConjunction().And().WhereNotIn<TTable, TValue>(field, values);
+            qb.UseFilter().UseConjunction().And().WhereNotIn<TTable, TValue>(field, values, tableAlias);
             return qb;
         }
 
@@ -428,14 +469,16 @@ namespace Jattac.Libraries.QBuilder
         /// Adds a HAVING predicate to filter grouped rows.
         /// Call after at least one <see cref="GroupBy{TTable,TField}(QBuilder, Expression{Func{TTable,TField}})"/>.
         /// </summary>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         public static QBuilder Having<TTable, TField>(
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
             FilterOperator op,
-            object value)
+            object value,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseHaving().Where<TTable>(field, op, value);
+            qb.UseHaving().Where<TTable>(field, op, value, tableAlias);
             return qb;
         }
 
@@ -444,10 +487,11 @@ namespace Jattac.Libraries.QBuilder
             this QBuilder qb,
             Expression<Func<TTable, TField>> fieldSelector,
             FilterOperator op,
-            object value)
+            object value,
+            string tableAlias = null)
         {
             var field = new FieldNameResolver().GetFieldName(fieldSelector);
-            qb.UseHaving().UseConjunction().And().Where<TTable>(field, op, value);
+            qb.UseHaving().UseConjunction().And().Where<TTable>(field, op, value, tableAlias);
             return qb;
         }
 
@@ -460,12 +504,14 @@ namespace Jattac.Libraries.QBuilder
         /// <typeparam name="TField">Field type.</typeparam>
         /// <param name="qb">The query builder.</param>
         /// <param name="fieldSelector">Lambda selecting the column, e.g. <c>o => o.UserId</c>.</param>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         /// <returns>The same <see cref="QBuilder"/> for chaining.</returns>
         public static QBuilder GroupBy<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
-            qb.UseGrouper().GroupBy<TTable, TField>(fieldSelector);
+            qb.UseGrouper().GroupBy<TTable, TField>(fieldSelector, tableAlias);
             return qb;
         }
 
@@ -479,42 +525,47 @@ namespace Jattac.Libraries.QBuilder
         /// <typeparam name="TField">Field type.</typeparam>
         /// <param name="qb">The query builder.</param>
         /// <param name="fieldSelector">Lambda selecting the column, e.g. <c>u => u.Name</c>.</param>
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
         /// <returns>The same <see cref="QBuilder"/> for chaining.</returns>
         public static QBuilder OrderBy<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
-            qb.UseOrdering().OrderBy<TTable, TField>(fieldSelector);
+            qb.UseOrdering().OrderBy<TTable, TField>(fieldSelector, tableAlias);
             return qb;
         }
 
         /// <summary>Adds a descending ORDER BY column.</summary>
         public static QBuilder OrderByDescending<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
-            qb.UseOrdering().OrderByDescending<TTable, TField>(fieldSelector);
+            qb.UseOrdering().OrderByDescending<TTable, TField>(fieldSelector, tableAlias);
             return qb;
         }
 
         /// <summary>
         /// Adds an additional ascending sort column.
-        /// Semantically equivalent to <see cref="OrderBy{TTable,TField}(QBuilder,Expression{Func{TTable,TField}})"/>
+        /// Semantically equivalent to <see cref="OrderBy{TTable,TField}(QBuilder,Expression{Func{TTable,TField}},string)"/>
         /// but makes secondary-sort intent explicit.
         /// </summary>
         public static QBuilder ThenBy<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
-            return OrderBy<TTable, TField>(qb, fieldSelector);
+            return OrderBy<TTable, TField>(qb, fieldSelector, tableAlias);
         }
 
         /// <summary>Adds an additional descending sort column.</summary>
         public static QBuilder ThenByDescending<TTable, TField>(
             this QBuilder qb,
-            Expression<Func<TTable, TField>> fieldSelector)
+            Expression<Func<TTable, TField>> fieldSelector,
+            string tableAlias = null)
         {
-            return OrderByDescending<TTable, TField>(qb, fieldSelector);
+            return OrderByDescending<TTable, TField>(qb, fieldSelector, tableAlias);
         }
 
         // ─── PAGING ───────────────────────────────────────────────────────────────
@@ -544,7 +595,7 @@ namespace Jattac.Libraries.QBuilder
 
         /// <summary>
         /// Applies OFFSET / FETCH NEXT paging (SQL Server 2012+ / ANSI SQL).
-        /// Requires an ORDER BY clause — call <see cref="OrderBy{TTable,TField}(QBuilder,Expression{Func{TTable,TField}})"/> first,
+        /// Requires an ORDER BY clause — call <see cref="OrderBy{TTable,TField}(QBuilder,Expression{Func{TTable,TField}},string)"/> first,
         /// or let this method emit it via <paramref name="fieldSelector"/>.
         /// </summary>
         /// <typeparam name="TTable">Table whose field drives the ORDER BY.</typeparam>

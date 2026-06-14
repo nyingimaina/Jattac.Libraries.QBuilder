@@ -394,7 +394,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void SchemaQualifiedTable_AliasStripsSchema()
         {
-            var qb = Q.Build(t => "dbo." + t.Name, parameterize: false);
+            var qb = Q.New(t => "dbo." + t.Name, parameterize: false);
             qb.UseSelector().Select<User>("Id");
             var sql = qb.Build();
             // alias must be "tUser" not "tdbo.User"

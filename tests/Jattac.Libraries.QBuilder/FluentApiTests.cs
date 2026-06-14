@@ -23,7 +23,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void QBuildDefaultParameterizes()
         {
-            var qb = Q.Build();
+            var qb = Q.New();
             qb.UseSelector().Select<User>("Name");
             var result = qb.BuildWithParameters();
             Assert.NotNull(result);
@@ -32,7 +32,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void QBuildFalseDoesNotParameterize()
         {
-            var qb = Q.Build(parameterize: false);
+            var qb = Q.New(parameterize: false);
             qb.UseSelector().Select<User>("Name");
             var sql = qb.Build();
             Assert.NotNull(sql);
@@ -41,7 +41,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void QBuildWithCustomResolver()
         {
-            var qb = Q.Build(t => "dbo." + t.Name, parameterize: false);
+            var qb = Q.New(t => "dbo." + t.Name, parameterize: false);
             qb.UseSelector().Select<User>("Id");
             var sql = qb.Build();
             Assert.Contains("dbo.User", sql);
@@ -52,7 +52,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void SelectLambdaNoAlias()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, Guid>(u => u.Id)
                 .Build();
             Assert.Contains("tUser.Id", Normalize(sql));
@@ -61,7 +61,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void SelectLambdaWithAlias()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, string>(u => u.Name, alias: "UserName")
                 .Build();
             Assert.Contains("as UserName", Normalize(sql));
@@ -70,7 +70,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void SelectDistinct()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Distinct()
                 .Select<User, string>(u => u.Name)
                 .Build();
@@ -80,7 +80,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void SelectTop()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Top(10)
                 .Select<User, string>(u => u.Name)
                 .Build();
@@ -90,7 +90,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void AggregateSum()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Aggregate<Order, decimal>(o => o.Amount, "Total", AggregateFunction.Sum)
                 .Build();
             Assert.Contains("Sum(", sql);
@@ -100,7 +100,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void AggregateCount()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Aggregate<Order, Guid>(o => o.Id, "Cnt", AggregateFunction.Count)
                 .Build();
             Assert.Contains("Count(", sql);
@@ -113,7 +113,7 @@ namespace Jattac.QBuilderTests
                 .When<Order, string>(o => o.Status, FilterOperator.EqualTo, "active").Then("Active")
                 .Else("Other");
 
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<Order, Guid>(o => o.Id)
                 .SelectCaseWhen(caseExpr, alias: "StatusLabel")
                 .Build();
@@ -127,7 +127,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void InnerJoinExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, Guid>(u => u.Id)
                 .Select<Order, decimal>(o => o.Amount)
                 .InnerJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
@@ -140,7 +140,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void LeftJoinExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, Guid>(u => u.Id)
                 .Select<Order, decimal>(o => o.Amount)
                 .LeftJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
@@ -152,7 +152,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void CrossJoinExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, Guid>(u => u.Id)
                 .Select<Product, string>(p => p.Name)
                 .CrossJoin<User, Product>()
@@ -166,7 +166,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void WhereExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, string>(u => u.Name)
                 .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
                 .Build();
@@ -178,7 +178,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void AndWhereExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, string>(u => u.Name)
                 .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
                 .AndWhere<User, string>(u => u.Name, FilterOperator.NotEqualTo, "Bob")
@@ -191,7 +191,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void OrWhereExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, string>(u => u.Name)
                 .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
                 .OrWhere<User, string>(u => u.Name, FilterOperator.EqualTo, "Bob")
@@ -203,7 +203,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void WhereIsNullExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<Order, Guid>(o => o.Id)
                 .WhereIsNull<Order, DateTime?>(o => o.DeletedAt)
                 .Build();
@@ -214,7 +214,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void AndWhereIsNullExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<Order, Guid>(o => o.Id)
                 .Where<Order, string>(o => o.Status, FilterOperator.EqualTo, "active")
                 .AndWhereIsNull<Order, DateTime?>(o => o.DeletedAt)
@@ -227,7 +227,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void WhereIsNotNullExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<Order, Guid>(o => o.Id)
                 .WhereIsNotNull<Order, DateTime?>(o => o.DeletedAt)
                 .Build();
@@ -238,7 +238,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void WhereBetweenExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<Order, decimal>(o => o.Amount)
                 .WhereBetween<Order, decimal>(o => o.Amount, 10, 100)
                 .Build();
@@ -251,7 +251,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void WhereInExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<Order, string>(o => o.Status)
                 .WhereIn<Order, string, string>(o => o.Status, new[] { "new", "processing" })
                 .Build();
@@ -263,7 +263,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void WhereNotInExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<Order, string>(o => o.Status)
                 .WhereNotIn<Order, string, string>(o => o.Status, new[] { "cancelled" })
                 .Build();
@@ -274,7 +274,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void OpenGroupCloseGroupExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<Order, string>(o => o.Status)
                 .Where<Order, string>(o => o.Status, FilterOperator.EqualTo, "new")
                 .OpenGroup()
@@ -291,7 +291,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void GroupByAndHavingExtensions()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Aggregate<Order, decimal>(o => o.Amount, "Total", AggregateFunction.Sum)
                 .GroupBy<Order, Guid>(o => o.UserId)
                 .Having<Order, decimal>(o => o.Amount, FilterOperator.GreaterThan, 100)
@@ -307,7 +307,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void OrderByExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, string>(u => u.Name)
                 .OrderBy<User, string>(u => u.Name)
                 .Build();
@@ -318,7 +318,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void OrderByDescendingExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, string>(u => u.Name)
                 .OrderByDescending<User, string>(u => u.Name)
                 .Build();
@@ -329,7 +329,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void ThenByExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, string>(u => u.Name)
                 .OrderBy<User, Guid>(u => u.Id)
                 .ThenBy<User, string>(u => u.Name)
@@ -344,7 +344,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void PageSqlServerExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, Guid>(u => u.Id)
                 .PageSqlServer<User, string>(u => u.Name, page: 1, pageSize: 10)
                 .Build();
@@ -356,7 +356,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void PageOffsetFetchExtension()
         {
-            var sql = Q.Build(parameterize: false)
+            var sql = Q.New(parameterize: false)
                 .Select<User, Guid>(u => u.Id)
                 .PageOffsetFetch<User, string>(u => u.Name, page: 2, pageSize: 10)
                 .Build();
@@ -369,7 +369,7 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void WhereExtensionParameterized()
         {
-            var result = Q.Build(parameterize: true)
+            var result = Q.New(parameterize: true)
                 .Select<User, string>(u => u.Name)
                 .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
                 .BuildWithParameters();

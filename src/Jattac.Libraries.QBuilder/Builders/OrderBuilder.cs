@@ -28,9 +28,10 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// </summary>
         /// <typeparam name="TTable">The table the field belongs to.</typeparam>
         /// <param name="field">The column name.</param>
-        public QBuilder OrderBy<TTable>(string field)
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
+        public QBuilder OrderBy<TTable>(string field, string tableAlias = null)
         {
-            Append<TTable>(field, "Asc");
+            Append<TTable>(field, "Asc", tableAlias);
             return QBuilder;
         }
 
@@ -40,9 +41,10 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// </summary>
         /// <typeparam name="TTable">The table the field belongs to.</typeparam>
         /// <param name="field">The column name.</param>
-        public QBuilder OrderByDescending<TTable>(string field)
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
+        public QBuilder OrderByDescending<TTable>(string field, string tableAlias = null)
         {
-            Append<TTable>(field, "Desc");
+            Append<TTable>(field, "Desc", tableAlias);
             return QBuilder;
         }
 
@@ -52,9 +54,10 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// <typeparam name="TTable">The table the field belongs to.</typeparam>
         /// <typeparam name="TField">The field type.</typeparam>
         /// <param name="fieldSelector">Lambda selecting the field, e.g. <c>u => u.Name</c>.</param>
-        public QBuilder OrderBy<TTable, TField>(Expression<Func<TTable, TField>> fieldSelector)
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
+        public QBuilder OrderBy<TTable, TField>(Expression<Func<TTable, TField>> fieldSelector, string tableAlias = null)
         {
-            Append<TTable>(_fieldNameResolver.GetFieldName(fieldSelector), "Asc");
+            Append<TTable>(_fieldNameResolver.GetFieldName(fieldSelector), "Asc", tableAlias);
             return QBuilder;
         }
 
@@ -64,9 +67,10 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// <typeparam name="TTable">The table the field belongs to.</typeparam>
         /// <typeparam name="TField">The field type.</typeparam>
         /// <param name="fieldSelector">Lambda selecting the field, e.g. <c>u => u.CreatedAt</c>.</param>
-        public QBuilder OrderByDescending<TTable, TField>(Expression<Func<TTable, TField>> fieldSelector)
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
+        public QBuilder OrderByDescending<TTable, TField>(Expression<Func<TTable, TField>> fieldSelector, string tableAlias = null)
         {
-            Append<TTable>(_fieldNameResolver.GetFieldName(fieldSelector), "Desc");
+            Append<TTable>(_fieldNameResolver.GetFieldName(fieldSelector), "Desc", tableAlias);
             return QBuilder;
         }
 
@@ -82,11 +86,11 @@ namespace Jattac.Libraries.QBuilder.Builders
 
         private bool _pendingQualify = true;
 
-        private void Append<TTable>(string field, string mode)
+        private void Append<TTable>(string field, string mode, string tableAlias = null)
         {
             _orders.Add(new OrderDescription
             {
-                TableAlias = QBuilder.TableNameAliaser.GetTableAlias<TTable>(),
+                TableAlias = tableAlias ?? QBuilder.TableNameAliaser.GetTableAlias<TTable>(),
                 Field = field,
                 Mode = mode,
                 QualifyWithTableName = _pendingQualify,

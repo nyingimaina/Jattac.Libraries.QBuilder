@@ -25,12 +25,14 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// </summary>
         /// <typeparam name="TTable">The table the field belongs to.</typeparam>
         /// <param name="field">The column name.</param>
-        public GroupBuilder GroupBy<TTable>(string field)
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
+        public GroupBuilder GroupBy<TTable>(string field, string tableAlias = null)
         {
             GroupFields.Add(new GroupDescription
             {
                 FieldName = field,
                 TableName = QBuilder.TableNameResolver(typeof(TTable)),
+                ExplicitAlias = tableAlias,
             });
             return this;
         }
@@ -41,9 +43,10 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// <typeparam name="TTable">The table the field belongs to.</typeparam>
         /// <typeparam name="TField">The field type.</typeparam>
         /// <param name="fieldSelector">Lambda selecting the field, e.g. <c>o => o.UserId</c>.</param>
-        public GroupBuilder GroupBy<TTable, TField>(Expression<Func<TTable, TField>> fieldSelector)
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
+        public GroupBuilder GroupBy<TTable, TField>(Expression<Func<TTable, TField>> fieldSelector, string tableAlias = null)
         {
-            return GroupBy<TTable>(_fieldNameResolver.GetFieldName(fieldSelector));
+            return GroupBy<TTable>(_fieldNameResolver.GetFieldName(fieldSelector), tableAlias);
         }
 
         internal string Build()
@@ -56,7 +59,8 @@ namespace Jattac.Libraries.QBuilder.Builders
             var grouping = $"{Environment.NewLine} Group By ";
             foreach (var groupField in GroupFields)
             {
-                grouping += $"{QBuilder.TableNameAliaser.GetTableAlias(groupField.TableName)}.{groupField.FieldName},";
+                var alias = groupField.ExplicitAlias ?? QBuilder.TableNameAliaser.GetTableAlias(groupField.TableName);
+                grouping += $"{alias}.{groupField.FieldName},";
             }
 
             return grouping.Substring(0, grouping.Length - 1) + Environment.NewLine;

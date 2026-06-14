@@ -37,7 +37,7 @@ using Jattac.Libraries.QBuilder;         // Q, QBuilder
 using Jattac.Libraries.QBuilder.Enums;  // FilterOperator, AggregateFunction
 
 // 1. Build a parameterized query (safe by default)
-var result = Q.Build()                                   // parameterize: true
+var result = Q.New()                                   // parameterize: true
     .Select<User, Guid>(u => u.Id)
     .Select<User, string>(u => u.Name, alias: "UserName")
     .Where<User, bool>(u => u.Active, FilterOperator.EqualTo, true)
@@ -56,19 +56,19 @@ var users = await connection.QueryAsync<User>(
 
 ## Core concepts
 
-### Entry point — `Q.Build()`
+### Entry point — `Q.New()`
 
 The static `Q` class is the single entry point for all queries.
 
 ```csharp
 // Parameterized (default) — call BuildWithParameters() at the end
-var qb = Q.Build();
+var qb = Q.New();
 
 // Non-parameterized — call Build() at the end
-var qb = Q.Build(parameterize: false);
+var qb = Q.New(parameterize: false);
 
 // Custom table-name resolver — map CLR types to SQL table names
-var qb = Q.Build(t => "dbo." + t.Name + "s");
+var qb = Q.New(t => "dbo." + t.Name + "s");
 // User  → "dbo.Users"
 // Order → "dbo.Orders"
 ```
@@ -85,8 +85,8 @@ When a custom resolver maps to schema-qualified names (`dbo.Users`), the schema 
 
 | Mode | Entry | Build call | Use when |
 |---|---|---|---|
-| Parameterized | `Q.Build()` | `BuildWithParameters()` | Production code, user-supplied values |
-| Literal | `Q.Build(false)` | `Build()` | Reporting, internal tooling, testing |
+| Parameterized | `Q.New()` | `BuildWithParameters()` | Production code, user-supplied values |
+| Literal | `Q.New(false)` | `Build()` | Reporting, internal tooling, testing |
 
 **Always use parameterized mode with any user-supplied value.** `WhereExplicitly()` (raw SQL injection point) throws in parameterized mode as a guard rail.
 
@@ -97,7 +97,7 @@ When a custom resolver maps to schema-qualified names (`dbo.Users`), the schema 
 ### 1. SELECT
 
 ```csharp
-Q.Build(false)
+Q.New(false)
     .Select<User, Guid>(u => u.Id)                        // single column
     .Select<User, string>(u => u.Name, alias: "UserName") // with alias
     .Select<Order, decimal>(o => o.Amount)                // from another table (after joining)
@@ -195,7 +195,7 @@ Q.Build(false)
 ### 4. GROUP BY and HAVING
 
 ```csharp
-Q.Build(false)
+Q.New(false)
     .Aggregate<Order, decimal>(o => o.Amount, "Total", AggregateFunction.Sum)
     .InnerJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
     .GroupBy<Order, Guid>(o => o.UserId)
@@ -240,7 +240,7 @@ var statusLabel = CaseWhenBuilder.For<Order>()
     .When<Order, string>(o => o.Status, FilterOperator.EqualTo, "closed").Then("Closed")
     .Else("Unknown");
 
-Q.Build(false)
+Q.New(false)
     .Select<Order, Guid>(o => o.Id)
     .SelectCaseWhen(statusLabel, alias: "StatusLabel")
     .Build();
@@ -249,10 +249,10 @@ Q.Build(false)
 ### 8. UNION / UNION ALL / INTERSECT / EXCEPT
 
 ```csharp
-var activeUsers = Q.Build(false).Select<User, Guid>(u => u.Id)
+var activeUsers = Q.New(false).Select<User, Guid>(u => u.Id)
     .Where<User, bool>(u => u.Active, FilterOperator.EqualTo, true);
 
-var premiumUsers = Q.Build(false).Select<User, Guid>(u => u.Id)
+var premiumUsers = Q.New(false).Select<User, Guid>(u => u.Id)
     .Where<User, string>(u => u.Tier, FilterOperator.EqualTo, "premium");
 
 // Set operations — chain on the left-hand query before calling Build()
@@ -266,11 +266,11 @@ var sql = activeUsers
 ### 9. Common Table Expressions (CTEs)
 
 ```csharp
-var activeOrders = Q.Build(false)
+var activeOrders = Q.New(false)
     .Select<Order, Guid>(o => o.Id)
     .Where<Order, string>(o => o.Status, FilterOperator.EqualTo, "active");
 
-var sql = Q.Build(false)
+var sql = Q.New(false)
     .WithCte("ActiveOrders", activeOrders)
     .Select<User, Guid>(u => u.Id)
     .Build();
@@ -284,7 +284,7 @@ var sql = Q.Build(false)
 
 Multiple CTEs are comma-separated automatically:
 ```csharp
-Q.Build(false)
+Q.New(false)
     .WithCte("CTE1", query1)
     .WithCte("CTE2", query2)
     .Select<User, string>(u => u.Name)
@@ -299,7 +299,7 @@ Q.Build(false)
 // "Get paged list of active users with their total order amounts,
 //  filtered to users with total > 500, ordered by total descending"
 
-var result = Q.Build()
+var result = Q.New()
     .Select<User, Guid>(u => u.Id)
     .Select<User, string>(u => u.Name, alias: "UserName")
     .Aggregate<Order, decimal>(o => o.Amount, "TotalAmount", AggregateFunction.Sum)
@@ -322,7 +322,7 @@ var rows = await connection.QueryAsync(result.ParameterizedSql, result.Parameter
 ### Build() is single-use
 
 ```csharp
-var qb = Q.Build(false).Select<User, Guid>(u => u.Id);
+var qb = Q.New(false).Select<User, Guid>(u => u.Id);
 var sql1 = qb.Build();   // OK
 var sql2 = qb.Build();   // throws InvalidOperationException — create a new QBuilder
 ```
@@ -342,7 +342,7 @@ This is intentional — it makes it safe to pass optional filter lists. If you n
 ### WhereExplicitly is blocked in parameterized mode
 
 ```csharp
-var qb = Q.Build();   // parameterize: true
+var qb = Q.New();   // parameterize: true
 qb.UseFilter().WhereExplicitly("Status = 'active'");  // throws InvalidOperationException
 ```
 
@@ -366,20 +366,20 @@ When you call `Union(other)`, `other.Build()` is called immediately. Any changes
 
 ```csharp
 // Wrong — Build() throws if parameterize: true
-Q.Build().Select<User, Guid>(u => u.Id).Build();
+Q.New().Select<User, Guid>(u => u.Id).Build();
 
 // Right
-Q.Build().Select<User, Guid>(u => u.Id).BuildWithParameters();
+Q.New().Select<User, Guid>(u => u.Id).BuildWithParameters();
 
 // Also wrong — BuildWithParameters() throws if parameterize: false
-Q.Build(false).Select<User, Guid>(u => u.Id).BuildWithParameters();
+Q.New(false).Select<User, Guid>(u => u.Id).BuildWithParameters();
 ```
 
 ---
 
 ## Best practices
 
-1. **Always use parameterized mode with user-provided values.** `Q.Build()` defaults to `parameterize: true` for a reason.
+1. **Always use parameterized mode with user-provided values.** `Q.New()` defaults to `parameterize: true` for a reason.
 
 2. **Define domain models as plain classes**, not EF entities. QBuilder only uses the type name and property names — no attributes needed.
 
@@ -387,18 +387,18 @@ Q.Build(false).Select<User, Guid>(u => u.Id).BuildWithParameters();
    ```csharp
    // Register once at application start
    var resolver = (Type t) => $"dbo.{t.Name}s";
-   var qb = Q.Build(resolver);
+   var qb = Q.New(resolver);
    ```
 
-4. **Inject `Q.Build(resolver)` factories** in DI-based apps rather than calling `Q.Build()` directly everywhere — this avoids scattering the resolver logic.
+4. **Inject `Q.New(resolver)` factories** in DI-based apps rather than calling `Q.New()` directly everywhere — this avoids scattering the resolver logic.
 
 5. **For complex queries, build sub-queries first:**
    ```csharp
-   var existsCheck = Q.Build(false)
+   var existsCheck = Q.New(false)
        .Select<Order, Guid>(o => o.Id)
        .Where<Order, Guid>(o => o.UserId, FilterOperator.EqualTo, userId);
 
-   var main = Q.Build(false)
+   var main = Q.New(false)
        .Select<User, Guid>(u => u.Id)
        .WhereExists(existsCheck)
        .Build();
@@ -425,7 +425,7 @@ new QBuilder("t", parameterize: false)
     .Then().Build();
 
 // New API — same result
-Q.Build(false)
+Q.New(false)
     .Select<User, Guid>(u => u.Id)
     .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
     .Build();

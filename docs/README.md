@@ -1,444 +1,725 @@
-# Jattac.Libraries.QBuilder
+# Jattac.Libraries.QBuilder — API Reference
 
-A **fully-fledged C# dialect of SQL** — a fluent, type-safe query builder for .NET that covers every clause in ANSI SQL plus the SQL Server and MariaDB/MySQL dialects.
-
-[![NuGet](https://img.shields.io/nuget/v/Jattac.Libraries.QBuilder.svg)](https://www.nuget.org/packages/Jattac.Libraries.QBuilder)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+A fluent SQL query builder for .NET 6+. Produces raw SQL strings or parameterized queries; it never executes them. Works with any database driver.
 
 ---
 
-## Why QBuilder?
+## Table of Contents
 
-Writing raw SQL strings in application code is fragile — typos are runtime errors, refactors are grep-and-pray, and parameterization is tedious to get right. ORMs solve some of this but are heavy and leak abstractions.
-
-QBuilder sits in the middle: it is **purely a query builder**. It produces SQL strings (optionally parameterized) that you execute yourself with Dapper, ADO.NET, or any micro-ORM. There is no tracking, no migrations, no change detection — just clean, tested SQL.
-
-**Key properties:**
-- Zero boilerplate — one fluent chain, no sub-builder ceremonies
-- Parameterized by default — injection-safe without extra effort
-- Full SQL coverage — SELECT, JOIN (all 5 types), WHERE, GROUP BY, HAVING, ORDER BY, paging (ROW_NUMBER, OFFSET/FETCH, LIMIT), UNION/INTERSECT/EXCEPT, CTEs, CASE WHEN, EXISTS, BETWEEN, IS NULL
-- Every public member has XML doc comments — your IDE guides you at every step
-- 100% unit-tested — 97 tests, 0 failures
+1. [Getting Started](#1-getting-started)
+2. [SELECT](#2-select)
+3. [JOIN](#3-join)
+4. [WHERE](#4-where)
+5. [GROUP BY / HAVING](#5-group-by--having)
+6. [ORDER BY](#6-order-by)
+7. [Paging](#7-paging)
+8. [CTEs](#8-ctes)
+9. [Set Operations](#9-set-operations)
+10. [Parameterization Deep-Dive](#10-parameterization-deep-dive)
+11. [Self-Joins](#11-self-joins)
+12. [Known Limitations](#12-known-limitations)
 
 ---
 
-## Installation
+## 1. Getting Started
 
-```bash
+### Installation
+
+```
 dotnet add package Jattac.Libraries.QBuilder
 ```
 
----
-
-## Quick start
+### Namespaces
 
 ```csharp
-using Jattac.Libraries.QBuilder;         // Q, QBuilder
-using Jattac.Libraries.QBuilder.Enums;  // FilterOperator, AggregateFunction
-
-// 1. Build a parameterized query (safe by default)
-var result = Q.Build()                                   // parameterize: true
-    .Select<User, Guid>(u => u.Id)
-    .Select<User, string>(u => u.Name, alias: "UserName")
-    .Where<User, bool>(u => u.Active, FilterOperator.EqualTo, true)
-    .OrderBy<User, string>(u => u.Name)
-    .BuildWithParameters();
-
-// result.ParameterizedSql — the SQL string with @Name0 placeholders
-// result.Parameters       — Dictionary<string, object> { "@Active0": true }
-
-// 2. Execute with Dapper
-var users = await connection.QueryAsync<User>(
-    result.ParameterizedSql, result.Parameters);
+using Jattac.Libraries.QBuilder;
+using Jattac.Libraries.QBuilder.Enums;
 ```
 
----
+### Two modes: literal vs parameterized
 
-## Core concepts
-
-### Entry point — `Q.Build()`
-
-The static `Q` class is the single entry point for all queries.
-
-```csharp
-// Parameterized (default) — call BuildWithParameters() at the end
-var qb = Q.Build();
-
-// Non-parameterized — call Build() at the end
-var qb = Q.Build(parameterize: false);
-
-// Custom table-name resolver — map CLR types to SQL table names
-var qb = Q.Build(t => "dbo." + t.Name + "s");
-// User  → "dbo.Users"
-// Order → "dbo.Orders"
-```
-
-The custom resolver is useful when table names differ from CLR type names (plural names, schema prefixes, legacy naming conventions).
-
-### Table aliases
-
-Every table gets an alias derived from its CLR type name: `User` → `tUser`, `Order` → `tOrder`.
-
-When a custom resolver maps to schema-qualified names (`dbo.Users`), the schema prefix is stripped automatically — `tUsers` not `tdbo.Users`.
-
-### Parameterized vs literal mode
-
-| Mode | Entry | Build call | Use when |
+| Mode | Entry point | Terminator | Returns |
 |---|---|---|---|
-| Parameterized | `Q.Build()` | `BuildWithParameters()` | Production code, user-supplied values |
-| Literal | `Q.Build(false)` | `Build()` | Reporting, internal tooling, testing |
+| Literal | `Q.New(parameterize: false)` | `.Build()` | `string` |
+| Parameterized | `Q.New()` (default) | `.BuildWithParameters()` | `BuiltQuery` |
 
-**Always use parameterized mode with any user-supplied value.** `WhereExplicitly()` (raw SQL injection point) throws in parameterized mode as a guard rail.
+`BuiltQuery` contains:
+- `string Sql` — the SQL string with `@p_Name` placeholders
+- `Dictionary<string, object> Parameters` — the bound values
+
+**Use parameterized mode whenever values come from user input.** Literal mode is for values you fully control (constants, enums, known IDs).
+
+```csharp
+// Literal
+string sql = Q.New(parameterize: false)
+    .Select((User u) => u.Name)
+    .Build();
+
+// Parameterized
+BuiltQuery result = Q.New()
+    .Select((User u) => u.Name)
+    .Where((User u) => u.Age, FilterOperator.GreaterThan, 18)
+    .BuildWithParameters();
+// result.Sql        → "Select tUser.Name From User tUser\nWhere tUser.Age > @p_Age\n"
+// result.Parameters → { "@p_Age": 18 }
+```
+
+### Custom table name resolver
+
+By default the table name is the CLR type name (`typeof(User).Name` → `"User"`). Override globally with a delegate:
+
+```csharp
+// Pluralise + schema-prefix
+Q.New(t => $"dbo.{t.Name}s")
+    .Select((User u) => u.Id)
+    .Build();
+// → "Select tUser.Id From dbo.Users tUser"
+```
+
+### One-time use
+
+A builder cannot be reused after calling `Build()` or `BuildWithParameters()`. Create a new `Q.New()` for each query.
 
 ---
 
-## Step-by-step walkthrough
+## 2. SELECT
 
-### 1. SELECT
+### Type inference — recommended style
+
+C# infers both `TTable` and `TField` from a typed lambda parameter. You never need to write explicit type arguments:
 
 ```csharp
-Q.Build(false)
-    .Select<User, Guid>(u => u.Id)                       // single column
-    .Select<User, string>(u => u.Name, alias: "UserName") // with alias
-    .Select<Order, decimal>(o => o.Amount)                // from another table (after joining)
+// Recommended — types inferred from (User u)
+Q.New().Select((User u) => u.Id).Build();
+
+// Equivalent — explicit types, more verbose
+Q.New().Select<User, Guid>(u => u.Id).Build();
+```
+
+### Plain field — no column alias
+
+```csharp
+Q.New()
+    .Select((User u) => u.Id)
+    .Select((User u) => u.Name)
+    .Build();
+// → "Select\ntUser.Id,\ntUser.Name From User tUser"
+```
+
+### Plain field — with column alias
+
+```csharp
+Q.New()
+    .Select((User u) => u.Name, "UserName")
+    .Build();
+// → "Select\ntUser.Name as UserName From User tUser"
+```
+
+### Aggregate functions
+
+```csharp
+Q.New()
+    .Aggregate((Order o) => o.Total, "TotalRevenue", AggregateFunction.Sum)
+    .Aggregate((Order o) => o.Id,    "OrderCount",   AggregateFunction.Count)
     .Build();
 ```
 
-```csharp
-// Aggregate functions
-.Aggregate<Order, decimal>(o => o.Amount, "Total",   AggregateFunction.Sum)
-.Aggregate<Order, Guid>  (o => o.Id,     "Count",   AggregateFunction.Count)
-.Aggregate<Order, decimal>(o => o.Amount, "MaxAmt",  AggregateFunction.Max)
-.Aggregate<Order, decimal>(o => o.Amount, "MinAmt",  AggregateFunction.Min)
-.Aggregate<Order, decimal>(o => o.Amount, "Average", AggregateFunction.Avg)
-.Aggregate<Order, Guid>  (o => o.Id,     "Unique",  AggregateFunction.CountDistinct)
-```
-
-```csharp
-// Modifiers
-.Top(100)       // SELECT TOP 100
-.Distinct()     // SELECT DISTINCT
-```
-
-### 2. JOINS
-
-```csharp
-// INNER JOIN (most common)
-.InnerJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
-
-// LEFT JOIN — all users, even those with no orders
-.LeftJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
-
-// RIGHT JOIN
-.RightJoin<Order, Product, int, int>(o => o.ProductId, p => p.Id)
-
-// FULL OUTER JOIN
-.FullOuterJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
-
-// CROSS JOIN — Cartesian product, no ON clause
-.CrossJoin<Product, Region>()
-```
-
-### 3. WHERE
-
-```csharp
-// First predicate
-.Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
-
-// Additional predicates
-.AndWhere<User, int>(u => u.Age, FilterOperator.GreaterThan, 18)
-.OrWhere<User, string>(u => u.Name, FilterOperator.StartsWith, "A")
-
-// NULL checks
-.WhereIsNull<Order, DateTime?>(o => o.DeletedAt)
-.AndWhereIsNotNull<User, string>(u => u.Name)
-
-// Range check
-.WhereBetween<User, int>(u => u.Age, 18, 65)
-.AndWhereBetween<Order, decimal>(o => o.Amount, 100, 1000)
-
-// Set membership
-.WhereIn<Order, string, string>(o => o.Status, new[] { "new", "processing" })
-.WhereNotIn<Order, string, string>(o => o.Status, new[] { "cancelled" })
-
-// Subquery existence
-.WhereExists(subQueryBuilder)
-.AndWhereExists(subQueryBuilder)
-.WhereNotExists(subQueryBuilder)
-
-// Parenthesis groups (nestable)
-.Where<Order, string>(o => o.Status, FilterOperator.EqualTo, "new")
-.OpenGroup()
-    .OrWhere<Order, decimal>(o => o.Amount, FilterOperator.GreaterThan, 100)
-    .OrWhere<Order, decimal>(o => o.Amount, FilterOperator.LessThan, 5)
-.CloseGroup()
-```
-
-#### All `FilterOperator` values
-
-| Operator | SQL |
+| `AggregateFunction` value | Emitted SQL fragment |
 |---|---|
-| `EqualTo` | `=` |
-| `NotEqualTo` | `<>` |
-| `LessThan` | `<` |
-| `LessThanOrEqualTo` | `<=` |
-| `GreaterThan` | `>` |
-| `GreaterThanOrEqualTo` | `>=` |
-| `StartsWith` | `Like 'value%'` |
-| `Contains` | `Like '%value%'` |
-| `EndsWith` | `Like '%value'` |
-| `IsNull` | `IS NULL` |
-| `IsNotNull` | `IS NOT NULL` |
-| `Between` | `BETWEEN` (use `WhereBetween`) |
-| `NotBetween` | `NOT BETWEEN` (use `WhereNotBetween`) |
+| `Count` | `Count(tOrder.Id)` |
+| `CountDistinct` | `Count(Distinct tOrder.Id)` |
+| `Sum` | `Sum(tOrder.Total)` |
+| `Avg` | `Avg(tOrder.Total)` |
+| `Min` | `Min(tOrder.Total)` |
+| `Max` | `Max(tOrder.Total)` |
 
-### 4. GROUP BY and HAVING
+### TOP — SQL Server only
 
 ```csharp
-Q.Build(false)
-    .Aggregate<Order, decimal>(o => o.Amount, "Total", AggregateFunction.Sum)
-    .InnerJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
-    .GroupBy<Order, Guid>(o => o.UserId)
-    .Having<Order, decimal>(o => o.Amount, FilterOperator.GreaterThan, 100)
+Q.New()
+    .Top(10)
+    .Select((User u) => u.Name)
+    .Build();
+// → "Select  Top 10  \ntUser.Name From User tUser"
+```
+
+**Pitfall:** `Top()` emits SQL Server `SELECT TOP n` syntax — not portable. Use `PageOffsetFetch` or `PageMySql` for cross-database row limiting.
+
+### DISTINCT
+
+```csharp
+Q.New()
+    .Distinct()
+    .Select((User u) => u.CountryCode)
     .Build();
 ```
 
-### 5. ORDER BY
+`Distinct()` applies to the entire result set, not to individual columns.
+
+### CASE WHEN
 
 ```csharp
-.OrderBy<User, string>(u => u.Name)           // ASC
-.OrderByDescending<User, DateTime>(u => u.CreatedAt)  // DESC
-
-// Multiple columns — call in priority order
-.OrderBy<User, string>(u => u.LastName)
-.ThenBy<User, string>(u => u.FirstName)
-.ThenByDescending<User, DateTime>(u => u.CreatedAt)
-```
-
-### 6. Paging
-
-Choose the flavor for your database:
-
-```csharp
-// SQL Server (ROW_NUMBER — works on SQL Server 2005+)
-.PageSqlServer<User, string>(u => u.Name, page: 1, pageSize: 20)
-
-// SQL Server 2012+ / ANSI SQL (OFFSET FETCH)
-.PageOffsetFetch<User, string>(u => u.Name, page: 2, pageSize: 20)
-
-// MySQL / MariaDB (LIMIT OFFSET)
-.PageMySql<User, string>(u => u.Name, page: 1, pageSize: 20)
-```
-
-Pages are **1-based** — page 1 is the first page.
-
-### 7. CASE WHEN
-
-```csharp
-var statusLabel = CaseWhenBuilder.For<Order>()
-    .When<Order, string>(o => o.Status, FilterOperator.EqualTo, "active").Then("Active")
-    .When<Order, string>(o => o.Status, FilterOperator.EqualTo, "closed").Then("Closed")
+var statusExpr = new CaseWhenBuilder()
+    .When("tOrder.Status = 1").Then("Active")
+    .When("tOrder.Status = 2").Then("Closed")
     .Else("Unknown");
 
-Q.Build(false)
-    .Select<Order, Guid>(o => o.Id)
-    .SelectCaseWhen(statusLabel, alias: "StatusLabel")
+Q.New()
+    .Select((Order o) => o.Id)
+    .SelectCaseWhen(statusExpr, "StatusLabel")
     .Build();
 ```
 
-### 8. UNION / UNION ALL / INTERSECT / EXCEPT
+**Limitation:** `Then()` and `Else()` values are always emitted as single-quoted strings. Numeric THEN values are not currently supported.
+
+---
+
+## 3. JOIN
+
+### Type inference on joins
+
+All four type parameters (`TLeft`, `TRight`, `TLeftField`, `TRightField`) are inferred from typed lambda parameters:
 
 ```csharp
-var activeUsers = Q.Build(false).Select<User, Guid>(u => u.Id)
-    .Where<User, bool>(u => u.Active, FilterOperator.EqualTo, true);
+// Inferred — recommended
+Q.New()
+    .Select((User u) => u.Name)
+    .Select((Order o) => o.Total)
+    .InnerJoin((User u) => u.Id, (Order o) => o.UserId)
+    .Build();
 
-var premiumUsers = Q.Build(false).Select<User, Guid>(u => u.Id)
-    .Where<User, string>(u => u.Tier, FilterOperator.EqualTo, "premium");
-
-// Set operations — chain on the left-hand query before calling Build()
-var sql = activeUsers
-    .UnionAll(premiumUsers)   // or .Union() .Intersect() .Except()
+// Explicit — same result
+Q.New()
+    .InnerJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
     .Build();
 ```
 
-**Important:** Call `Build()` on the combined query, not on the individual sub-queries beforehand.
-
-### 9. Common Table Expressions (CTEs)
+### All join types
 
 ```csharp
-var activeOrders = Q.Build(false)
-    .Select<Order, Guid>(o => o.Id)
-    .Where<Order, string>(o => o.Status, FilterOperator.EqualTo, "active");
+// INNER JOIN — most common
+.InnerJoin((User u) => u.Id, (Order o) => o.UserId)
 
-var sql = Q.Build(false)
-    .WithCte("ActiveOrders", activeOrders)
-    .Select<User, Guid>(u => u.Id)
-    .Build();
+// LEFT JOIN
+.LeftJoin((User u) => u.Id, (Order o) => o.UserId)
 
-// Emits:
-// With ActiveOrders As (
-//   ...inner query...
-// )
-// Select * from (...) as t
+// RIGHT JOIN
+.RightJoin((User u) => u.Id, (Order o) => o.UserId)
+
+// FULL OUTER JOIN — ⚠ not supported in MySQL
+.FullOuterJoin((User u) => u.Id, (Order o) => o.UserId)
+
+// CROSS JOIN — no ON clause emitted
+.CrossJoin<User, Country>()
 ```
 
-Multiple CTEs are comma-separated automatically:
+**Emitted SQL (INNER JOIN example):**
+```sql
+Select
+tUser.Name,
+tOrder.Total From User tUser
+join Order tOrder on tUser.Id = tOrder.UserId
+```
+
+### DB compatibility
+
+| Join type | SQL Server | PostgreSQL | MySQL / MariaDB |
+|---|---|---|---|
+| INNER | ✓ | ✓ | ✓ |
+| LEFT | ✓ | ✓ | ✓ |
+| RIGHT | ✓ | ✓ | ✓ |
+| FULL OUTER | ✓ | ✓ | ✗ |
+| CROSS | ✓ | ✓ | ✓ |
+
+### Self-joins
+
+See [Section 11 — Self-Joins](#11-self-joins).
+
+### Derived table joins
+
+Use `JoinBuilder.UseDerivedTableJoiner<TOuterTable>()` to join a subquery as a derived table. The inner query must be fully built (call `.Build()` on it) before passing it to the joiner.
+
+### Pitfall: mismatched join key types
+
+The compiler accepts `InnerJoin((User u) => u.Id, (Order o) => o.UserId)` even when the two fields are different CLR types. This compiles but may produce wrong SQL at runtime. Verify that join key types match.
+
+### Pitfall: no composite join key in one call
+
+`JOIN A ON A.Key1 = B.Key1 AND A.Key2 = B.Key2` cannot be expressed in a single join call. Workaround: add the second condition as a WHERE predicate.
+
+### Pitfall: no OR between join conditions
+
+Each join emits exactly one equality `ON` clause. You cannot express `ON (A.Id = B.AId OR A.Id = B.BId)` directly.
+
+---
+
+## 4. WHERE
+
+### First predicate vs conjunctions
+
 ```csharp
-Q.Build(false)
-    .WithCte("CTE1", query1)
-    .WithCte("CTE2", query2)
-    .Select<User, string>(u => u.Name)
+// First condition — use Where
+.Where((User u) => u.Active, FilterOperator.EqualTo, true)
+
+// Additional AND condition
+.AndWhere((User u) => u.Age, FilterOperator.GreaterThan, 18)
+
+// Additional OR condition
+.OrWhere((User u) => u.Role, FilterOperator.EqualTo, "admin")
+```
+
+**Best practice:** Always use `AndWhere`/`OrWhere` for predicates after the first. Calling `Where` a second time is internally treated as AND, but the intent is unclear to readers.
+
+### All FilterOperator values
+
+| `FilterOperator` | Emitted SQL |
+|---|---|
+| `EqualTo` | `= value` |
+| `NotEqualTo` | `<> value` |
+| `GreaterThan` | `> value` |
+| `GreaterThanOrEqualTo` | `>= value` |
+| `LessThan` | `< value` |
+| `LessThanOrEqualTo` | `<= value` |
+| `Like` | `Like 'value'` |
+| `NotLike` | `Not Like 'value'` |
+| `IsNull` | `Is Null` |
+| `IsNotNull` | `Is Not Null` |
+
+### NULL checks
+
+```csharp
+.WhereIsNull((User u) => u.DeletedAt)
+.AndWhereIsNull((User u) => u.DeletedAt)
+
+.WhereIsNotNull((User u) => u.DeletedAt)
+.AndWhereIsNotNull((User u) => u.DeletedAt)
+```
+
+### BETWEEN / NOT BETWEEN
+
+```csharp
+// Inclusive bounds
+.WhereBetween((Order o) => o.Total, 100.0m, 500.0m)
+.AndWhereBetween((Order o) => o.CreatedAt, startDate, endDate)
+```
+
+**Pitfall:** Both bounds are mandatory. The `from` value must be ≤ `to` in most databases — reversing them returns zero rows, not the full set.
+
+### IN / NOT IN
+
+```csharp
+var ids = new[] { 1, 2, 3 };
+
+.WhereIn((User u) => u.Id, ids)
+.AndWhereIn((User u) => u.Id, ids)
+
+.WhereNotIn((User u) => u.StatusCode, new[] { "X", "D" })
+.AndWhereNotIn((User u) => u.StatusCode, new[] { "X", "D" })
+```
+
+**Pitfall: silent no-op on empty or null list.** If `ids` is empty or `null`, the entire predicate is silently skipped — no WHERE clause is emitted for that call. An empty `WhereIn` does **not** produce `WHERE 1=0`. If you need match-nothing semantics, check the list length yourself before building.
+
+In parameterized mode, each value gets its own parameter (`@p_Id`, `@p_Id_1`, `@p_Id_2`, …). Very large lists create many parameters — SQL Server caps the total at 2100 per query.
+
+### EXISTS / NOT EXISTS (subquery)
+
+```csharp
+var subQuery = Q.New(parameterize: false)
+    .Select((Order o) => o.Id)
+    .Where((Order o) => o.UserId, FilterOperator.EqualTo, "tUser.Id")
+    .Build();
+
+.WhereExists(subQuery)
+.AndWhereExists(subQuery)
+.WhereNotExists(subQuery)
+.AndWhereNotExists(subQuery)
+```
+
+### Parenthesis groups
+
+```csharp
+Q.New()
+    .Where((User u) => u.Active, FilterOperator.EqualTo, true)
+    .OpenGroup()
+        .AndWhere((User u) => u.Role, FilterOperator.EqualTo, "admin")
+        .OrWhere((User u) => u.Role, FilterOperator.EqualTo, "superuser")
+    .CloseGroup()
+    .Build();
+// → "Where tUser.Active = @p_Active\n And  (tUser.Role = @p_Role\n Or tUser.Role = @p_Role_1\n) "
+```
+
+Every `OpenGroup()` must be paired with `CloseGroup()`. The builder throws at `Build()` time if any group is left open. Nested groups are supported.
+
+### WhereExplicitly — raw SQL fragment
+
+```csharp
+Q.New(parameterize: false)
+    .Select((User u) => u.Id)
+    .WhereExplicitly("tUser.Age > 18 And tUser.CountryCode = 'KE'")
+    .Build();
+```
+
+**Only available in literal mode.** Throws `InvalidOperationException` in parameterized mode. Never pass user-controlled values to this method.
+
+### tableAlias override
+
+```csharp
+.Where((Employee e) => e.DeptId, FilterOperator.EqualTo, 5, tableAlias: "emp")
+```
+
+See [Section 11](#11-self-joins) for the full self-join pattern.
+
+---
+
+## 5. GROUP BY / HAVING
+
+### GROUP BY
+
+```csharp
+Q.New()
+    .Select((Order o) => o.UserId)
+    .Aggregate((Order o) => o.Total, "TotalSpend", AggregateFunction.Sum)
+    .GroupBy((Order o) => o.UserId)
+    .Build();
+// → "Select\ntOrder.UserId,\nSum(tOrder.Total) as TotalSpend From Order tOrder\n Group By tOrder.UserId"
+```
+
+Multiple grouping columns:
+
+```csharp
+.GroupBy((Order o) => o.UserId)
+.GroupBy((Order o) => o.StatusCode)
+```
+
+String-name overload:
+
+```csharp
+qb.UseGrouper().GroupBy<Order>("UserId");
+```
+
+**Best practice:** Every non-aggregated SELECT column must appear in GROUP BY. PostgreSQL and SQL Server enforce this strictly; MySQL allows it but produces non-deterministic values for omitted columns.
+
+### HAVING
+
+```csharp
+Q.New()
+    .Select((Order o) => o.UserId)
+    .Aggregate((Order o) => o.Total, "TotalSpend", AggregateFunction.Sum)
+    .GroupBy((Order o) => o.UserId)
+    .Having((Order o) => o.Total, FilterOperator.GreaterThan, 1000m)
+    .AndHaving((Order o) => o.Total, FilterOperator.LessThan, 50000m)
+    .Build();
+```
+
+HAVING supports all `FilterOperator` values and the `tableAlias` override, identical to WHERE.
+
+**Pitfall:** HAVING without GROUP BY is syntactically valid in some databases but produces undefined results. Always pair HAVING with at least one GroupBy call.
+
+---
+
+## 6. ORDER BY
+
+### Basic usage
+
+```csharp
+.OrderBy((User u) => u.Name)                   // ASC
+.OrderByDescending((User u) => u.CreatedAt)    // DESC
+
+// Multiple columns — left-to-right priority
+.OrderBy((User u) => u.LastName)
+.ThenBy((User u) => u.FirstName)
+.ThenByDescending((User u) => u.CreatedAt)
+```
+
+`ThenBy` / `ThenByDescending` are identical to `OrderBy` / `OrderByDescending` — they exist purely to express secondary-sort intent.
+
+### String field name overloads
+
+When the column is not on a strongly-typed model:
+
+```csharp
+qb.UseOrdering().OrderBy<User>("FullName");
+qb.UseOrdering().OrderByDescending<User>("CreatedAt");
+```
+
+### Ordering by a SELECT alias
+
+A computed alias (e.g. from CASE WHEN) is not a real column — it must not be qualified with a table alias:
+
+```csharp
+qb.UseOrdering()
+    .DoNotQualifyWithTableName()
+    .OrderBy<User>("StatusLabel");
+// → "Order By StatusLabel Asc"
+```
+
+### tableAlias override
+
+```csharp
+.OrderBy((Employee e) => e.Name, tableAlias: "mgr")
+// → "Order By mgr.Name Asc"
+```
+
+---
+
+## 7. Paging
+
+Always add an ORDER BY before paging — without a stable sort, pages are non-deterministic.
+
+### SQL Server — ROW_NUMBER()
+
+Compatible with SQL Server 2005+ and Azure SQL.
+
+```csharp
+Q.New()
+    .Select((User u) => u.Id)
+    .Select((User u) => u.Name)
+    .PageSqlServer((User u) => u.Id, page: 1, pageSize: 20)
+    .Build();
+```
+
+The sort column for ROW_NUMBER is specified directly in the paging call. A separate `.OrderBy()` is not required.
+
+### ANSI — OFFSET / FETCH NEXT
+
+Compatible with SQL Server 2012+, PostgreSQL 9.3+, SQLite 3.25+.
+
+```csharp
+Q.New()
+    .Select((User u) => u.Id)
+    .OrderBy((User u) => u.Id)
+    .PageOffsetFetch((User u) => u.Id, page: 2, pageSize: 25)
+    .Build();
+// → "… Order By tUser.Id Asc OFFSET 25 ROWS FETCH NEXT 25 ROWS ONLY"
+```
+
+### MySQL — LIMIT / OFFSET
+
+Compatible with MySQL and MariaDB.
+
+```csharp
+Q.New()
+    .Select((User u) => u.Id)
+    .PageMySql((User u) => u.Id, page: 3, pageSize: 10, orderAscending: false)
+    .Build();
+// → "… Order By tUser.Id Desc LIMIT 20,10"
+```
+
+### All paging parameters
+
+| Parameter | Type | Meaning |
+|---|---|---|
+| `fieldSelector` | lambda | Column to sort by |
+| `page` | `uint` | 1-based page number |
+| `pageSize` | `ushort` | Rows per page |
+| `orderAscending` | `bool` | `true` = ASC (default), `false` = DESC |
+
+---
+
+## 8. CTEs
+
+```csharp
+var activeUsersQuery = Q.New(parameterize: false)
+    .Select((User u) => u.Id)
+    .Select((User u) => u.Name)
+    .Where((User u) => u.Active, FilterOperator.EqualTo, true)
+    .Build();
+
+var result = Q.New(parameterize: false)
+    .WithCte("ActiveUsers", activeUsersQuery)
+    .Select((User u) => u.Name)
+    .Build();
+// → "With ActiveUsers As (\nSelect …\n)\nSelect tUser.Name From User tUser"
+```
+
+Multiple CTEs:
+
+```csharp
+Q.New(parameterize: false)
+    .WithCte("Cte1", query1)
+    .WithCte("Cte2", query2)
+    .Select(...)
+    .Build();
+// → "With Cte1 As (…), Cte2 As (…)\nSelect …"
+```
+
+**Constraint:** CTEs are emitted in declaration order. A CTE cannot reference another CTE declared after it. Declare them in dependency order.
+
+---
+
+## 9. Set Operations
+
+```csharp
+var query1 = Q.New(parameterize: false).Select((User u) => u.Id).Build();
+var query2 = Q.New(parameterize: false).Select((Admin a) => a.UserId).Build();
+
+// UNION — deduplicates rows
+Q.New(parameterize: false).Select((User u) => u.Id).Union(query2).Build();
+
+// UNION ALL — keeps duplicates, faster
+Q.New(parameterize: false).Select((User u) => u.Id).UnionAll(query2).Build();
+
+// INTERSECT — ⚠ not in MySQL
+Q.New(parameterize: false).Select((User u) => u.Id).Intersect(query2).Build();
+
+// EXCEPT — ⚠ not in MySQL
+Q.New(parameterize: false).Select((User u) => u.Id).Except(query2).Build();
+```
+
+**Requirements:**
+- Both sides must select the same number of columns.
+- Column types should be compatible.
+- Column names come from the first (left) query.
+
+**DB compatibility:**
+
+| Operation | SQL Server | PostgreSQL | MySQL / MariaDB |
+|---|---|---|---|
+| UNION | ✓ | ✓ | ✓ |
+| UNION ALL | ✓ | ✓ | ✓ |
+| INTERSECT | ✓ | ✓ | ✗ |
+| EXCEPT | ✓ | ✓ | ✗ |
+
+Chaining:
+
+```csharp
+Q.New(parameterize: false)
+    .Select((User u) => u.Id)
+    .Union(query2)
+    .Union(query3)
     .Build();
 ```
 
 ---
 
-## Complete real-world example
+## 10. Parameterization Deep-Dive
+
+### How parameters are named
+
+Each bound value gets a parameter named `@p_<fieldName>`. Collisions within the same query get a counter suffix:
 
 ```csharp
-// "Get paged list of active users with their total order amounts,
-//  filtered to users with total > 500, ordered by total descending"
-
-var result = Q.Build()
-    .Select<User, Guid>(u => u.Id)
-    .Select<User, string>(u => u.Name, alias: "UserName")
-    .Aggregate<Order, decimal>(o => o.Amount, "TotalAmount", AggregateFunction.Sum)
-    .LeftJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
-    .Where<User, bool>(u => u.Active, FilterOperator.EqualTo, true)
-    .AndWhereIsNull<User, DateTime?>(u => u.DeletedAt)
-    .GroupBy<Order, Guid>(o => o.UserId)
-    .Having<Order, decimal>(o => o.Amount, FilterOperator.GreaterThan, 500)
-    .OrderByDescending<Order, decimal>(o => o.Amount)
-    .PageSqlServer<Order, decimal>(o => o.Amount, page: 1, pageSize: 25)
+var r = Q.New()
+    .Select((User u) => u.Name)
+    .Where((User u) => u.Age, FilterOperator.GreaterThan, 18)
+    .AndWhere((User u) => u.Age, FilterOperator.LessThan, 65)
     .BuildWithParameters();
-
-var rows = await connection.QueryAsync(result.ParameterizedSql, result.Parameters);
+// r.Parameters → { "@p_Age": 18, "@p_Age_1": 65 }
 ```
+
+### IN generates N individual parameters
+
+```csharp
+var r = Q.New()
+    .Select((User u) => u.Id)
+    .WhereIn((User u) => u.Id, new[] { 1, 2, 3 })
+    .BuildWithParameters();
+// r.Sql        → "… tUser.Id  in (@p_Id, @p_Id_1, @p_Id_2)\n"
+// r.Parameters → { "@p_Id": 1, "@p_Id_1": 2, "@p_Id_2": 3 }
+```
+
+This is not the same as an array parameter — values are enumerated at build time. SQL Server has a 2100 total parameter limit per query. For large sets, consider a temp table or JOIN strategy.
+
+### WhereExplicitly is unavailable in parameterized mode
+
+Calling `WhereExplicitly` when `parameterize: true` throws `InvalidOperationException`. Use a typed `Where` overload instead.
+
+### Security
+
+Always use parameterized mode (the default) for any value sourced from user input, HTTP parameters, or external systems. Literal mode is safe only for compile-time constants or trusted internal values.
 
 ---
 
-## Pitfalls and edge cases
+## 11. Self-Joins
 
-### Build() is single-use
+### The problem
 
-```csharp
-var qb = Q.Build(false).Select<User, Guid>(u => u.Id);
-var sql1 = qb.Build();   // OK
-var sql2 = qb.Build();   // throws InvalidOperationException — create a new QBuilder
+The auto-generated alias is always `"t" + TypeName`. Two references to the same table in one query get the same alias, producing invalid SQL:
+
+```sql
+-- WRONG (both sides get tEmployee)
+select tEmployee.Name, tEmployee.Name
+from Employee tEmployee
+join Employee tEmployee on tEmployee.ManagerId = tEmployee.Id
 ```
 
-Create a new `QBuilder` for each query execution.
+### Solution
 
-### WhereIn / WhereNotIn with null or empty collections
+Every join method accepts optional `leftAlias` and `rightAlias`. Every SELECT, WHERE, ORDER BY, GROUP BY, and HAVING method accepts optional `tableAlias`. Providing these overrides the auto-generated alias for that specific reference.
+
+### Complete self-join example
 
 ```csharp
-// Both of these silently no-op — no WHERE clause is emitted
-.WhereIn<Order, string, string>(o => o.Status, null)
-.WhereIn<Order, string, string>(o => o.Status, new string[0])
+var result = Q.New()
+    .Select((Employee e) => e.Name, tableAlias: "emp")
+    .Select((Employee e) => e.Name, "ManagerName", tableAlias: "mgr")
+    .InnerJoin((Employee e) => e.ManagerId, (Employee m) => m.Id,
+        leftAlias: "emp", rightAlias: "mgr")
+    .Where((Employee e) => e.Active, FilterOperator.EqualTo, true, tableAlias: "emp")
+    .OrderBy((Employee e) => e.Name, tableAlias: "emp")
+    .BuildWithParameters();
 ```
 
-This is intentional — it makes it safe to pass optional filter lists. If you need an impossible condition (`1=0`), emit it explicitly.
+**Emitted SQL:**
+```sql
+Select
+emp.Name,
+mgr.Name as ManagerName From Employee emp
+join Employee mgr on emp.ManagerId = mgr.Id
+Where emp.Active = @p_Active
 
-### WhereExplicitly is blocked in parameterized mode
-
-```csharp
-var qb = Q.Build();   // parameterize: true
-qb.UseFilter().WhereExplicitly("Status = 'active'");  // throws InvalidOperationException
+Order By emp.Name Asc
 ```
 
-Use a typed `Where` overload instead, which binds values as parameters.
+### Rules
 
-### OpenGroup / CloseGroup must be balanced
+1. **Both** `leftAlias` and `rightAlias` must be supplied on the join call. Providing only one is not supported and falls back to auto-alias behaviour.
+2. Every SELECT / WHERE / ORDER BY / GROUP BY / HAVING call that references the self-joined table **must** include `tableAlias:` to specify which instance.
+3. For methods that have both a column-alias overload and a table-alias overload (e.g. `Select`), use the **named argument** syntax to avoid ambiguity: `Select((Employee e) => e.Name, tableAlias: "emp")`.
 
-Every `OpenGroup()` must be paired with a `CloseGroup()`. QBuilder validates this and throws at `Build()` time:
+### Triple self-join
 
 ```csharp
-qb.OpenGroup()
-    .OrWhere<Order, string>(o => o.Status, FilterOperator.EqualTo, "a")
-// Missing CloseGroup() → Build() throws "An unclosed parentheses was found"
+// Employee → Manager → Director
+Q.New()
+    .Select((Employee e) => e.Name, tableAlias: "emp")
+    .Select((Employee e) => e.Name, "ManagerName",  tableAlias: "mgr")
+    .Select((Employee e) => e.Name, "DirectorName", tableAlias: "dir")
+    .InnerJoin((Employee e) => e.ManagerId, (Employee m) => m.Id,
+        leftAlias: "emp", rightAlias: "mgr")
+    .InnerJoin((Employee e) => e.ManagerId, (Employee d) => d.Id,
+        leftAlias: "mgr", rightAlias: "dir")
+    .Build();
 ```
 
-### Set operations consume sub-queries eagerly
-
-When you call `Union(other)`, `other.Build()` is called immediately. Any changes made to `other` after this call are ignored.
-
-### Parameterized mode and BuildWithParameters
+### Self-join with GROUP BY and HAVING
 
 ```csharp
-// Wrong — Build() throws if parameterize: true
-Q.Build().Select<User, Guid>(u => u.Id).Build();
-
-// Right
-Q.Build().Select<User, Guid>(u => u.Id).BuildWithParameters();
-
-// Also wrong — BuildWithParameters() throws if parameterize: false
-Q.Build(false).Select<User, Guid>(u => u.Id).BuildWithParameters();
-```
-
----
-
-## Best practices
-
-1. **Always use parameterized mode with user-provided values.** `Q.Build()` defaults to `parameterize: true` for a reason.
-
-2. **Define domain models as plain classes**, not EF entities. QBuilder only uses the type name and property names — no attributes needed.
-
-3. **Use a custom resolver for non-trivial table naming:**
-   ```csharp
-   // Register once at application start
-   var resolver = (Type t) => $"dbo.{t.Name}s";
-   var qb = Q.Build(resolver);
-   ```
-
-4. **Inject `Q.Build(resolver)` factories** in DI-based apps rather than calling `Q.Build()` directly everywhere — this avoids scattering the resolver logic.
-
-5. **For complex queries, build sub-queries first:**
-   ```csharp
-   var existsCheck = Q.Build(false)
-       .Select<Order, Guid>(o => o.Id)
-       .Where<Order, Guid>(o => o.UserId, FilterOperator.EqualTo, userId);
-
-   var main = Q.Build(false)
-       .Select<User, Guid>(u => u.Id)
-       .WhereExists(existsCheck)
-       .Build();
-   ```
-
-6. **Do not reuse a `QBuilder` instance.** Build, execute, discard.
-
-7. **Test your queries in non-parameterized mode first** to inspect the SQL, then switch to parameterized mode for production.
-
----
-
-## Backward compatibility
-
-The v7.0 extension API coexists with the original `Use*()/Then()` API — all existing code compiles without changes. The extension methods are purely additive.
-
-```csharp
-// Old API — still works
-new QBuilder("t", parameterize: false)
-    .UseTableBoundSelector<User>()
-    .Select(u => u.Id)
-    .Then()
-    .UseFilter()
-    .Where<User>("Name", FilterOperator.EqualTo, "Alice")
-    .Then().Build();
-
-// New API — same result
-Q.Build(false)
-    .Select<User, Guid>(u => u.Id)
-    .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
+Q.New()
+    .Select((Employee e) => e.DeptId, tableAlias: "emp")
+    .Aggregate((Employee e) => e.Id, "HeadCount", AggregateFunction.Count, tableAlias: "emp")
+    .InnerJoin((Employee e) => e.ManagerId, (Employee m) => m.Id,
+        leftAlias: "emp", rightAlias: "mgr")
+    .GroupBy((Employee e) => e.DeptId, tableAlias: "emp")
+    .Having((Employee e) => e.Id, FilterOperator.GreaterThan, 5, tableAlias: "emp")
     .Build();
 ```
 
 ---
 
-## Window functions (v7.1 roadmap)
+## 12. Known Limitations
 
-LAG, LEAD, RANK, DENSE_RANK, ROW_NUMBER OVER (PARTITION BY), SUM OVER — these are planned for v7.1. The ROW_NUMBER() paging infrastructure already exists; the full window-function surface will be layered on top.
-
----
-
-## License
-
-MIT — see [LICENSE](../LICENSE).
+| Limitation | Detail / Workaround |
+|---|---|
+| Builder is one-time use | `Build()` / `BuildWithParameters()` resets internal state. Create a new `Q.New()` for each query. |
+| No subqueries in SELECT position | Subqueries are only supported in WHERE via `WhereExists` / `WhereNotExists`. |
+| No window functions | Deferred to v7.1. `ROW_NUMBER` is only available through the paging methods. |
+| CASE WHEN result values are always strings | `Then("val")` and `Else("val")` always emit single-quoted values. Numeric THEN is not supported. |
+| FULL OUTER JOIN not in MySQL | Workaround: `LEFT JOIN … UNION … RIGHT JOIN`. |
+| INTERSECT / EXCEPT not in MySQL | Workaround: subquery or application-level filtering. |
+| `Top()` is SQL Server only | Use `PageOffsetFetch` (SQL Server 2012+ / PostgreSQL) or `PageMySql` for cross-database limiting. |
+| No OR between join conditions | Each join emits one equality ON clause. Additional conditions must be WHERE predicates. |
+| No composite join key in one call | Workaround: add the extra equality as a WHERE predicate or chain a second join. |
+| Large IN lists generate many parameters | SQL Server caps total parameters at 2100 per query. Use a temp table or JOIN for large sets. |
+| `WhereExplicitly` unavailable in parameterized mode | Use a typed `Where` overload instead. |
+| Self-join requires manual aliases everywhere | Every column reference for a self-joined table must carry an explicit `tableAlias:` named argument. |

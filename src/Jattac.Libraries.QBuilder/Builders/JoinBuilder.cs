@@ -40,15 +40,28 @@ namespace Jattac.Libraries.QBuilder.Builders
 
         internal bool JoinsExist => Joins.Count > 0;
 
+        internal string FirstTableAlias
+        {
+            get
+            {
+                var firstJoin = Joins.FirstOrDefault();
+                if (firstJoin == null || firstJoin.IsInitialDerivedTableJoin)
+                {
+                    return null;
+                }
+                return firstJoin.RegularLeftAlias;
+            }
+        }
+
         internal InnerSelectDescription InnerSelectDescription { get; set; }
 
         internal List<string> JoinedDerivedTables => _joinedDerivedTables;
 
         private List<JoinDescription> Joins { get; set; } = new List<JoinDescription>();
 
-        public JoinBuilder InnerJoin<TLeftTable, TLeftField, TRightTable, TRightField>(Expression<Func<TLeftTable, TLeftField>> leftFieldNameDescriptor, Expression<Func<TRightTable, TRightField>> rightFieldNameDescriptor, string joinType)
+        public JoinBuilder InnerJoin<TLeftTable, TLeftField, TRightTable, TRightField>(Expression<Func<TLeftTable, TLeftField>> leftFieldNameDescriptor, Expression<Func<TRightTable, TRightField>> rightFieldNameDescriptor, string joinType, string leftAlias = null, string rightAlias = null)
         {
-            QueueJoin(leftFieldNameDescriptor, rightFieldNameDescriptor, joinType);
+            QueueJoin(leftFieldNameDescriptor, rightFieldNameDescriptor, joinType, leftAlias, rightAlias);
             return this;
         }
 
@@ -57,27 +70,27 @@ namespace Jattac.Libraries.QBuilder.Builders
             return new DerivedTableJoiner<TOuterTable>(this);
         }
 
-        public JoinBuilder InnerJoin<TLeftTable, TRightTable>(string leftField, string rightField)
+        public JoinBuilder InnerJoin<TLeftTable, TRightTable>(string leftField, string rightField, string leftAlias = null, string rightAlias = null)
         {
-            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.Inner);
+            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.Inner, leftAlias, rightAlias);
             return this;
         }
 
-        public JoinBuilder FullJoin<TLeftTable, TRightTable>(string leftField, string rightField)
+        public JoinBuilder FullJoin<TLeftTable, TRightTable>(string leftField, string rightField, string leftAlias = null, string rightAlias = null)
         {
-            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.Full);
+            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.Full, leftAlias, rightAlias);
             return this;
         }
 
-        public JoinBuilder LeftJoin<TLeftTable, TRightTable>(string leftField, string rightField)
+        public JoinBuilder LeftJoin<TLeftTable, TRightTable>(string leftField, string rightField, string leftAlias = null, string rightAlias = null)
         {
-            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.LeftJoin);
+            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.LeftJoin, leftAlias, rightAlias);
             return this;
         }
 
-        public JoinBuilder RightJoin<TLeftTable, TRightTable>(string leftField, string rightField)
+        public JoinBuilder RightJoin<TLeftTable, TRightTable>(string leftField, string rightField, string leftAlias = null, string rightAlias = null)
         {
-            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.RightJoin);
+            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, JoinTypes.RightJoin, leftAlias, rightAlias);
             return this;
         }
 
@@ -216,14 +229,14 @@ namespace Jattac.Libraries.QBuilder.Builders
             Joins.Add(joinDescription);
         }
 
-        private void QueueJoin<TLeftTable, TLeftField, TRightTable, TRightField>(Expression<Func<TLeftTable, TLeftField>> leftFieldNameDescriptor, Expression<Func<TRightTable, TRightField>> rightFieldNameDescriptor, string joinType)
+        private void QueueJoin<TLeftTable, TLeftField, TRightTable, TRightField>(Expression<Func<TLeftTable, TLeftField>> leftFieldNameDescriptor, Expression<Func<TRightTable, TRightField>> rightFieldNameDescriptor, string joinType, string leftAlias = null, string rightAlias = null)
         {
             var leftField = _fieldNameResolver.GetFieldName(leftFieldNameDescriptor);
             var rightField = _fieldNameResolver.GetFieldName(rightFieldNameDescriptor);
-            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, joinType);
+            QueueJoin<TLeftTable, TRightTable>(leftField, rightField, joinType, leftAlias, rightAlias);
         }
 
-        private void QueueJoin<TLeftTable, TRightTable>(string leftField, string rightField, string joinType)
+        private void QueueJoin<TLeftTable, TRightTable>(string leftField, string rightField, string joinType, string leftAlias = null, string rightAlias = null)
         {
             Joins.Add(new JoinDescription
             {
@@ -232,6 +245,8 @@ namespace Jattac.Libraries.QBuilder.Builders
                 RightField = rightField,
                 RightTable = QBuilder.TableNameResolver(typeof(TRightTable)),
                 JoinType = joinType,
+                RegularLeftAlias = leftAlias,
+                RegularRightAlias = rightAlias,
             });
         }
 
@@ -311,16 +326,22 @@ namespace Jattac.Libraries.QBuilder.Builders
             var isCrossJoin = joinDescription.JoinType == JoinTypes.Cross;
             if (isCrossJoin)
             {
-                var leftAlias = QBuilder.TableNameAliaser.GetTableAlias(joinDescription.LeftTable);
-                var rightAlias = QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
-                return $"Cross join {joinDescription.LeftTable} {leftAlias}{Environment.NewLine}";
+                var leftAlias = joinDescription.RegularLeftAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.LeftTable);
+                var rightAlias = joinDescription.RegularRightAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
+                return $"Cross join {joinDescription.RightTable} {rightAlias}{Environment.NewLine}";
             }
 
-            FlipTablesIfLeftTableAlreadyAliased(joinDescription);
+            var hasExplicitAliases = !string.IsNullOrEmpty(joinDescription.RegularLeftAlias) && !string.IsNullOrEmpty(joinDescription.RegularRightAlias);
+            if (!hasExplicitAliases)
+            {
+                FlipTablesIfLeftTableAlreadyAliased(joinDescription);
+            }
+
             var joinPrefix = GetJoinPrefix(joinDescription);
-            var rightTableAlias = QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
-            var line = $"{joinPrefix}join {joinDescription.LeftTable} {QBuilder.TableNameAliaser.GetTableAlias(joinDescription.LeftTable)} on {QBuilder.TableNameAliaser.GetTableAlias(joinDescription.LeftTable)}.{joinDescription.LeftField}";
-            line += $" = {rightTableAlias}.{joinDescription.RightField}{Environment.NewLine}";
+            var resolvedLeftAlias = joinDescription.RegularLeftAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.LeftTable);
+            var resolvedRightAlias = joinDescription.RegularRightAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
+            var line = $"{joinPrefix}join {joinDescription.LeftTable} {resolvedLeftAlias} on {resolvedLeftAlias}.{joinDescription.LeftField}";
+            line += $" = {resolvedRightAlias}.{joinDescription.RightField}{Environment.NewLine}";
             return line;
         }
 

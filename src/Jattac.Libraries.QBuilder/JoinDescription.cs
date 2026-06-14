@@ -30,6 +30,10 @@ namespace Jattac.Libraries.QBuilder
 
         public string ExplicitRightTableAlias { get; internal set; }
 
+        public string RegularLeftAlias { get; set; }
+
+        public string RegularRightAlias { get; set; }
+
         public bool Consumed { get; internal set; }
 
         internal Guid Id

@@ -4,18 +4,9 @@ namespace Jattac.Libraries.QBuilder.Helpers
     {
         public void Flip(JoinDescription joinDescription)
         {
-            var flippedVersion = new JoinDescription
-            {
-                LeftField = joinDescription.RightField,
-                LeftTable = joinDescription.RightTable,
-                RightTable = joinDescription.LeftTable,
-                RightField = joinDescription.LeftField,
-            };
-
-            joinDescription.LeftField = flippedVersion.LeftField;
-            joinDescription.LeftTable = flippedVersion.LeftTable;
-            joinDescription.RightField = flippedVersion.RightField;
-            joinDescription.RightTable = flippedVersion.RightTable;
+            (joinDescription.LeftTable, joinDescription.RightTable) = (joinDescription.RightTable, joinDescription.LeftTable);
+            (joinDescription.LeftField, joinDescription.RightField) = (joinDescription.RightField, joinDescription.LeftField);
+            (joinDescription.RegularLeftAlias, joinDescription.RegularRightAlias) = (joinDescription.RegularRightAlias, joinDescription.RegularLeftAlias);
         }
     }
 }

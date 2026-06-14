@@ -36,41 +36,41 @@ namespace Jattac.Libraries.QBuilder.Builders
             return this;
         }
 
-        public SelectBuilder Select<TTable, TField>(Expression<Func<TTable, TField>> fieldNameResolver)
+        public SelectBuilder Select<TTable, TField>(Expression<Func<TTable, TField>> fieldNameResolver, string explicitTableAlias = null)
         {
             var field = _fieldNameResolver.GetFieldName(fieldNameResolver);
-            return Select<TTable>(field);
+            return Select<TTable>(field, explicitTableAlias: explicitTableAlias);
         }
 
-        public SelectBuilder Select<TTable>(string field)
+        public SelectBuilder Select<TTable>(string field, string explicitTableAlias = null)
         {
-            return Select<TTable>(field, string.Empty);
+            return Select<TTable>(field, string.Empty, explicitTableAlias);
         }
 
-        public SelectBuilder Select<TTable, TField>(Expression<Func<TTable, TField>> fieldNameResolver, string fieldAlias)
-        {
-            var field = _fieldNameResolver.GetFieldName(fieldNameResolver);
-            return Select<TTable>(field, fieldAlias);
-        }
-
-        public SelectBuilder Select<TTable>(string field, string fieldAlias)
-        {
-            return SelectAggregated<TTable>(field, fieldAlias, string.Empty);
-        }
-
-        public SelectBuilder SelectAggregated<TTable, TField>(Expression<Func<TTable, TField>> fieldNameResolver, string fieldAlias, string aggregateFunction)
+        public SelectBuilder Select<TTable, TField>(Expression<Func<TTable, TField>> fieldNameResolver, string fieldAlias, string explicitTableAlias = null)
         {
             var field = _fieldNameResolver.GetFieldName(fieldNameResolver);
-            return SelectAggregated<TTable>(field, fieldAlias, aggregateFunction);
+            return Select<TTable>(field, fieldAlias, explicitTableAlias);
         }
 
-        public SelectBuilder SelectAggregated<TTable>(string field, string fieldAlias, string aggregateFunction)
+        public SelectBuilder Select<TTable>(string field, string fieldAlias, string explicitTableAlias = null)
+        {
+            return SelectAggregated<TTable>(field, fieldAlias, string.Empty, explicitTableAlias);
+        }
+
+        public SelectBuilder SelectAggregated<TTable, TField>(Expression<Func<TTable, TField>> fieldNameResolver, string fieldAlias, string aggregateFunction, string explicitTableAlias = null)
+        {
+            var field = _fieldNameResolver.GetFieldName(fieldNameResolver);
+            return SelectAggregated<TTable>(field, fieldAlias, aggregateFunction, explicitTableAlias);
+        }
+
+        public SelectBuilder SelectAggregated<TTable>(string field, string fieldAlias, string aggregateFunction, string explicitTableAlias = null)
         {
             var table = QBuilder.TableNameResolver(typeof(TTable));
-            return SelectExplicit(table, field, fieldAlias, aggregateFunction, false);
+            return SelectExplicit(table, field, fieldAlias, aggregateFunction, false, qualifyFieldWithTableName: true, explicitTableAlias: explicitTableAlias);
         }
 
-        public SelectBuilder SelectExplicit(string table, string field, string fieldAlias, string aggregateFunction, bool preventTableNameAliasing, bool qualifyFieldWithTableName = true)
+        public SelectBuilder SelectExplicit(string table, string field, string fieldAlias, string aggregateFunction, bool preventTableNameAliasing, bool qualifyFieldWithTableName = true, string explicitTableAlias = null)
         {
             _selects.Add(new SelectDescription
             {
@@ -79,7 +79,8 @@ namespace Jattac.Libraries.QBuilder.Builders
                 FieldAlias = fieldAlias,
                 AggregateFunction = aggregateFunction,
                 TableNameAliasingPrevented = preventTableNameAliasing,
-                QualifyFieldWithTableName = qualifyFieldWithTableName
+                QualifyFieldWithTableName = qualifyFieldWithTableName,
+                ExplicitTableAlias = explicitTableAlias,
             });
             return this;
         }
@@ -146,7 +147,10 @@ namespace Jattac.Libraries.QBuilder.Builders
             }
 
             var firstTableName = QBuilder.FirstTableName;
-            selects = selects.Substring(0, selects.Length - 1) + $" From {firstTableName} " + QBuilder.TableNameAliaser.GetTableAlias(firstTableName);
+            var joiner = QBuilder.UseJoiner();
+            var firstTableAlias = (joiner.JoinsExist ? joiner.FirstTableAlias : null)
+                ?? QBuilder.TableNameAliaser.GetTableAlias(firstTableName);
+            selects = selects.Substring(0, selects.Length - 1) + $" From {firstTableName} " + firstTableAlias;
             _selects = new List<SelectDescription>();
             return selects + Environment.NewLine;
         }
@@ -157,10 +161,13 @@ namespace Jattac.Libraries.QBuilder.Builders
             {
                 return selectDescription.Table;
             }
-            else
+
+            if (!string.IsNullOrEmpty(selectDescription.ExplicitTableAlias))
             {
-                return QBuilder.TableNameAliaser.GetTableAlias(selectDescription.Table);
+                return selectDescription.ExplicitTableAlias;
             }
+
+            return QBuilder.TableNameAliaser.GetTableAlias(selectDescription.Table);
         }
 
         private string GetAggregatedFieldIfRequired(string qualifiedField, string aggregateFunction)

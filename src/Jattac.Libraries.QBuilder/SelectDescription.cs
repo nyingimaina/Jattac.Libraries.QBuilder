@@ -13,5 +13,7 @@ namespace Jattac.Libraries.QBuilder
         public bool TableNameAliasingPrevented { get; set; }
 
         public bool QualifyFieldWithTableName { get; set; }
+
+        public string ExplicitTableAlias { get; set; }
     }
 }

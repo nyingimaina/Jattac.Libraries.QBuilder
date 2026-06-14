@@ -13,7 +13,7 @@ Major release introducing a fully-fledged C# dialect of SQL with a zero-boilerpl
 ### Added
 
 **Entry point**
-- `Q` static factory — `Q.Build()` (parameterized by default), `Q.Build(false)`, `Q.Build(tableNameResolver)`
+- `Q` static factory — `Q.New()` (parameterized by default), `Q.New(false)`, `Q.New(tableNameResolver)`
 
 **Fluent extension API (`QBuilderExtensions`)**
 - `Select<TTable, TField>` / `Select<TTable, TField>(alias)` — lambda-based column selection

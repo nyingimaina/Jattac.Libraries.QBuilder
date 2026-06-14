@@ -101,24 +101,26 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// <param name="field">Column name.</param>
         /// <param name="op">Comparison operator.</param>
         /// <param name="value">Value to compare against. Not required for <see cref="FilterOperator.IsNull"/> / <see cref="FilterOperator.IsNotNull"/>.</param>
-        public WhereConjunctionBuilder Where<TTable>(string field, FilterOperator op, object value)
+        /// <param name="tableAlias">Optional alias override for the table reference (e.g. for self-joins).</param>
+        public WhereConjunctionBuilder Where<TTable>(string field, FilterOperator op, object value, string tableAlias = null)
         {
             var condition = new ConditionMaker().GetCondition(field, op, value, builtQuery);
-            return Where<TTable>(field, condition);
+            return Where<TTable>(field, condition, tableAlias);
         }
 
         /// <summary>Adds a raw condition string for the given field and table.</summary>
-        public WhereConjunctionBuilder Where<TTable>(string field, string condition)
+        public WhereConjunctionBuilder Where<TTable>(string field, string condition, string tableAlias = null)
         {
-            return Where(typeof(TTable), field, condition);
+            return Where(typeof(TTable), field, condition, tableAlias);
         }
 
         /// <summary>Adds a raw condition string for the given table type, field, and condition.</summary>
-        public WhereConjunctionBuilder Where(Type tableType, string field, string condition)
+        public WhereConjunctionBuilder Where(Type tableType, string field, string condition, string tableAlias = null)
         {
+            var alias = tableAlias ?? QBuilder.TableNameAliaser.GetTableAlias(QBuilder.TableNameResolver(tableType));
             _wheres.Add(new WhereDescription
             {
-                Clause = $"{QBuilder.TableNameAliaser.GetTableAlias(QBuilder.TableNameResolver(tableType))}.{field} {condition}",
+                Clause = $"{alias}.{field} {condition}",
                 Conjunction = _nextConjuntion,
                 ParenthesesId = CurrentParentheses.Id,
             });
@@ -130,10 +132,11 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// </summary>
         /// <typeparam name="TTable">Table the field belongs to.</typeparam>
         /// <param name="field">Column name.</param>
-        public WhereConjunctionBuilder WhereIsNull<TTable>(string field)
+        /// <param name="tableAlias">Optional alias override for the table reference.</param>
+        public WhereConjunctionBuilder WhereIsNull<TTable>(string field, string tableAlias = null)
         {
             var condition = new ConditionMaker().GetCondition(field, FilterOperator.IsNull, null, builtQuery);
-            return Where<TTable>(field, condition);
+            return Where<TTable>(field, condition, tableAlias);
         }
 
         /// <summary>
@@ -141,10 +144,11 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// </summary>
         /// <typeparam name="TTable">Table the field belongs to.</typeparam>
         /// <param name="field">Column name.</param>
-        public WhereConjunctionBuilder WhereIsNotNull<TTable>(string field)
+        /// <param name="tableAlias">Optional alias override for the table reference.</param>
+        public WhereConjunctionBuilder WhereIsNotNull<TTable>(string field, string tableAlias = null)
         {
             var condition = new ConditionMaker().GetCondition(field, FilterOperator.IsNotNull, null, builtQuery);
-            return Where<TTable>(field, condition);
+            return Where<TTable>(field, condition, tableAlias);
         }
 
         /// <summary>
@@ -154,10 +158,11 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// <param name="field">Column name.</param>
         /// <param name="from">Inclusive lower bound.</param>
         /// <param name="to">Inclusive upper bound.</param>
-        public WhereConjunctionBuilder WhereBetween<TTable>(string field, object from, object to)
+        /// <param name="tableAlias">Optional alias override for the table reference.</param>
+        public WhereConjunctionBuilder WhereBetween<TTable>(string field, object from, object to, string tableAlias = null)
         {
             var condition = new ConditionMaker().GetBetweenCondition(field, false, from, to, builtQuery);
-            return Where<TTable>(field, condition);
+            return Where<TTable>(field, condition, tableAlias);
         }
 
         /// <summary>
@@ -167,10 +172,11 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// <param name="field">Column name.</param>
         /// <param name="from">Inclusive lower bound.</param>
         /// <param name="to">Inclusive upper bound.</param>
-        public WhereConjunctionBuilder WhereNotBetween<TTable>(string field, object from, object to)
+        /// <param name="tableAlias">Optional alias override for the table reference.</param>
+        public WhereConjunctionBuilder WhereNotBetween<TTable>(string field, object from, object to, string tableAlias = null)
         {
             var condition = new ConditionMaker().GetBetweenCondition(field, true, from, to, builtQuery);
-            return Where<TTable>(field, condition);
+            return Where<TTable>(field, condition, tableAlias);
         }
 
         /// <summary>
@@ -212,7 +218,7 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// <typeparam name="TValueType">The element type of the values collection.</typeparam>
         /// <param name="field">Column name.</param>
         /// <param name="values">Values to match against.</param>
-        public WhereConjunctionBuilder WhereIn<TTable, TValueType>(string field, IEnumerable<TValueType> values)
+        public WhereConjunctionBuilder WhereIn<TTable, TValueType>(string field, IEnumerable<TValueType> values, string tableAlias = null)
         {
             if (values == null)
             {
@@ -237,7 +243,7 @@ namespace Jattac.Libraries.QBuilder.Builders
                 }
 
                 whereInCriteria = whereInCriteria.TrimEnd(',', ' ');
-                return Where<TTable>(field, $" in ({whereInCriteria})");
+                return Where<TTable>(field, $" in ({whereInCriteria})", tableAlias);
             }
             else
             {
@@ -246,7 +252,7 @@ namespace Jattac.Libraries.QBuilder.Builders
                 {
                     return _whereConjunctionBuilder;
                 }
-                return Where<TTable>(field, $" in {criteria}");
+                return Where<TTable>(field, $" in {criteria}", tableAlias);
             }
         }
 
@@ -257,7 +263,8 @@ namespace Jattac.Libraries.QBuilder.Builders
         /// <typeparam name="TValueType">The element type of the values collection.</typeparam>
         /// <param name="field">Column name.</param>
         /// <param name="values">Values to exclude.</param>
-        public WhereConjunctionBuilder WhereNotIn<TTable, TValueType>(string field, IEnumerable<TValueType> values)
+        /// <param name="tableAlias">Optional alias override for the table reference.</param>
+        public WhereConjunctionBuilder WhereNotIn<TTable, TValueType>(string field, IEnumerable<TValueType> values, string tableAlias = null)
         {
             if (values == null)
             {
@@ -282,7 +289,7 @@ namespace Jattac.Libraries.QBuilder.Builders
                 }
 
                 whereNotInCriteria = whereNotInCriteria.TrimEnd(',', ' ');
-                return Where<TTable>(field, $" not in ({whereNotInCriteria})");
+                return Where<TTable>(field, $" not in ({whereNotInCriteria})", tableAlias);
             }
             else
             {
@@ -291,7 +298,7 @@ namespace Jattac.Libraries.QBuilder.Builders
                 {
                     return _whereConjunctionBuilder;
                 }
-                return Where<TTable>(field, $" not in {criteria}");
+                return Where<TTable>(field, $" not in {criteria}", tableAlias);
             }
         }
 
