@@ -11,18 +11,18 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     name: Update NuGet package
     steps:
 
       - name: Checkout repository
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Setup .NET Core @ Latest
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4
 
       - name: Build solution and generate NuGet package
         run: |  
-          cd src/Rocket.Libraries.QBuilder
+          cd src/Jattac.Libraries.QBuilder
           dotnet build -c Release -o out  
           dotnet nuget push ./out/*.nupkg -k ${{secrets.Nuget_Key}} -s https://api.nuget.org/v3/index.json

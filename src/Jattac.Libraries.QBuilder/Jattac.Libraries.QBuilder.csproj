@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Version>7.0.0-beta01</Version>
+    <PackageId>Jattac.Libraries.QBuilder</PackageId>
+    <Product>Jattac.Libraries.QBuilder</Product>
+    <AssemblyName>Jattac.Libraries.QBuilder</AssemblyName>
+    <RootNamespace>Jattac.Libraries.QBuilder</RootNamespace>
+    <CodeAnalysisRuleSet>../../rocket.rules.ruleset</CodeAnalysisRuleSet>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/nyingimaina/Jattac.Libraries.QBuilder</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/nyingimaina/Jattac.Libraries.QBuilder</PackageProjectUrl>
+    <Authors>Nyingi Maina</Authors>
+    <Company>Jattac</Company>
+    <PackageDescription>A fully-fledged C# dialect of SQL — a fluent, type-safe query builder for .NET covering every ANSI SQL clause plus SQL Server and MariaDB/MySQL dialects. Produces parameterized SQL strings you execute with Dapper, ADO.NET, or any micro-ORM. Zero boilerplate, injection-safe, 97 unit tests.</PackageDescription>
+    <PackageTags>sql;query-builder;dapper;fluent;orm;linq;select;join;where;cte;paging;parameterized;mysql;sqlserver;mariadb</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>v7.0.0-beta01 — Full SQL fluent API: UNION/INTERSECT/EXCEPT, CTEs, CASE WHEN, EXISTS, BETWEEN, IS NULL, paging (ROW_NUMBER, OFFSET/FETCH, LIMIT/OFFSET), all 5 JOIN types, GROUP BY, HAVING, ORDER BY, and parameterization throughout. See https://github.com/nyingimaina/Jattac.Libraries.QBuilder/blob/master/CHANGELOG.md for full details.</PackageReleaseNotes>
+    <Copyright>Copyright © 2024 Nyingi Maina</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Rocket.Libraries.Validation" Version="2.0.0-beta05" />
+    <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers" Version="2.9.6">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

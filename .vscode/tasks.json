@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/tests/Rocket.Libraries.QuriousTests/Rocket.Libraries.QuriousTests.csproj"
+                "${workspaceFolder}/tests/Jattac.Libraries.QBuilderTests/Jattac.Libraries.QBuilderTests.csproj"
             ],
             "problemMatcher": "$msCompile"
         }

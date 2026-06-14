@@ -2,7 +2,7 @@
 
 A **fully-fledged C# dialect of SQL** — a fluent, type-safe query builder for .NET that covers every clause in ANSI SQL plus the SQL Server and MariaDB/MySQL dialects.
 
-[![NuGet](https://img.shields.io/nuget/v/Rocket.Libraries.QBuilder.svg)](https://www.nuget.org/packages/Rocket.Libraries.QBuilder)
+[![NuGet](https://img.shields.io/nuget/v/Jattac.Libraries.QBuilder.svg)](https://www.nuget.org/packages/Jattac.Libraries.QBuilder)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 
 ---
@@ -25,7 +25,7 @@ QBuilder sits in the middle: it is **purely a query builder**. It produces SQL s
 ## Installation
 
 ```bash
-dotnet add package Rocket.Libraries.QBuilder
+dotnet add package Jattac.Libraries.QBuilder
 ```
 
 ---
@@ -33,8 +33,8 @@ dotnet add package Rocket.Libraries.QBuilder
 ## Quick start
 
 ```csharp
-using Rocket.Libraries.Qurious;         // Q, QBuilder
-using Rocket.Libraries.Qurious.Enums;  // FilterOperator, AggregateFunction
+using Jattac.Libraries.QBuilder;         // Q, QBuilder
+using Jattac.Libraries.QBuilder.Enums;  // FilterOperator, AggregateFunction
 
 // 1. Build a parameterized query (safe by default)
 var result = Q.Build()                                   // parameterize: true
