@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [7.0.0-rc2] — 2026-06-14
+
+### Added
+
+- `TableBoundWhereBuilder<T>.WhereIsNull<TField>(Expression)` and `WhereIsNotNull<TField>(Expression)` — lambda overloads for IS NULL / IS NOT NULL checks in the legacy `Use*()/Then()` API, matching the lambda API available on the fluent extension API.
+
+### Fixed
+
+- **Backward-compatibility regression** — `UseTableBoundSelector<T>().Select(expr, alias)` was dispatching to the `SelectBuilder.Select(expr, explicitTableAlias)` overload instead of `SelectBuilder.Select(expr, fieldAlias, explicitTableAlias)`, causing the alias string to be used as a table-name prefix rather than a column alias. This produced broken SQL (`Alias.Column` instead of `Table.Column AS Alias`) and a `MySqlException: Unknown column` at runtime when code was migrated from `Rocket.Libraries.QBuilder` with a namespace-only change. Now dispatches to the correct overload.
+
+---
+
 ## [7.0.0-beta01] — 2026-06-12
 
 Major release introducing a fully-fledged C# dialect of SQL with a zero-boilerplate fluent API, complete SQL clause coverage, and XML doc comments on every public member.

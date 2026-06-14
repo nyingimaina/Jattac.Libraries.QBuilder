@@ -183,6 +183,22 @@ namespace Jattac.QBuilderTests
             Assert.Throws<InvalidOperationException>(() => qBuilder.Build());
         }
 
+        // ── TableBoundSelector column alias backward compat ──────────────────
+
+        [Fact]
+        public void TableBoundSelector_SelectWithAlias_TreatsSecondArgAsColumnAliasNotTablePrefix()
+        {
+            var result = new QBuilder(parameterize: false)
+                .UseTableBoundSelector<TestTable>()
+                .Select(x => x.Name, "DisplayName")
+                .Select(x => x.Id)
+                .Then()
+                .Build();
+
+            Assert.Contains("as DisplayName", result);
+            Assert.DoesNotContain("DisplayName.Name", result);
+        }
+
         // ── WhereIn single-quote escaping ────────────────────────────────────
 
         [Fact]

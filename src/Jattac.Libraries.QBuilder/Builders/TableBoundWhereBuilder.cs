@@ -54,6 +54,18 @@ namespace Jattac.Libraries.QBuilder.Builders
             return _whereBuilder.OptionalWhere<TTable>(fieldName, fnResolveCondition);
         }
 
+        public WhereConjunctionBuilder WhereIsNull<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor)
+        {
+            var fieldName = _fieldNameResolver.GetFieldName(fieldNameDescriptor);
+            return _whereBuilder.WhereIsNull<TTable>(fieldName);
+        }
+
+        public WhereConjunctionBuilder WhereIsNotNull<TField>(Expression<Func<TTable, TField>> fieldNameDescriptor)
+        {
+            var fieldName = _fieldNameResolver.GetFieldName(fieldNameDescriptor);
+            return _whereBuilder.WhereIsNotNull<TTable>(fieldName);
+        }
+
         public WhereConjunctionBuilder WhereExplicitly(string criteria)
         {
             return _whereBuilder.WhereExplicitly(criteria);

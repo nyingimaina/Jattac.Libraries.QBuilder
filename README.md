@@ -412,7 +412,7 @@ Q.New(false).Select<User, Guid>(u => u.Id).BuildWithParameters();
 
 ## Backward compatibility
 
-The v7.0 extension API coexists with the original `Use*()/Then()` API — all existing code compiles without changes. The extension methods are purely additive.
+The v7.0 extension API coexists with the original `Use*()/Then()` API — the extension methods are purely additive. Code that used `Use*()/Then()` chains compiles and runs unchanged.
 
 ```csharp
 // Old API — still works
@@ -429,6 +429,62 @@ Q.New(false)
     .Select<User, Guid>(u => u.Id)
     .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
     .Build();
+```
+
+### Migrating from Rocket.Libraries.QBuilder
+
+See the [full migration guide](#migrating-from-rocketlibrariesqbuilder) below.
+
+---
+
+---
+
+## Migrating from Rocket.Libraries.QBuilder
+
+Jattac.Libraries.QBuilder is the renamed successor to `Rocket.Libraries.QBuilder`. The public API surface is identical — migration is a two-step process.
+
+### Step 1 — replace the package reference
+
+```xml
+<!-- Before -->
+<PackageReference Include="Rocket.Libraries.QBuilder" Version="*" />
+
+<!-- After -->
+<PackageReference Include="Jattac.Libraries.QBuilder" Version="7.0.0-rc2" />
+```
+
+### Step 2 — update the namespace import
+
+```csharp
+// Before
+using Rocket.Libraries.Qurious;
+
+// After
+using Jattac.Libraries.QBuilder;
+```
+
+No other changes are required. Every class, method, and enum name is unchanged.
+
+### Known issue fixed in v7.0.0-rc2
+
+A runtime regression affected `UseTableBoundSelector<T>().Select(expr, alias)` — the second argument was incorrectly treated as a table-name qualifier instead of a column alias. Code like:
+
+```csharp
+qBuilder
+    .UseTableBoundSelector<Company>()
+    .Select(c => c.Name, nameof(User.CompanyDisplayLabel))
+```
+
+produced `CompanyDisplayLabel.Name` in the SELECT list instead of `Company.Name AS CompanyDisplayLabel`, causing a `MySqlException: Unknown column` at runtime.
+
+This is corrected in **v7.0.0-rc2**. After updating to that version, the identical code path generates the expected `Table.Column AS Alias` form.
+
+If you cannot upgrade immediately, the modern fluent API is a direct replacement for the affected pattern:
+
+```csharp
+// Equivalent using the v7.0 fluent API (works in all versions)
+Q.New(false)
+    .Select<Company, string>(c => c.Name, alias: "CompanyDisplayLabel")
 ```
 
 ---

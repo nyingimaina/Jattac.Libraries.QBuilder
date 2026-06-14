@@ -32,7 +32,9 @@ namespace Jattac.Libraries.QBuilder.Builders
 
         public TableBoundSelectBuilder<TTable> Select<TField>(Expression<Func<TTable, TField>> fieldNameResolver, string fieldAlias)
         {
-            _selectBuilder.Select(fieldNameResolver, fieldAlias);
+            // Pass null explicitly so C# resolves to the 3-param overload (fieldAlias, explicitTableAlias)
+            // rather than the 2-param overload (explicitTableAlias) which would treat the alias as a table prefix.
+            _selectBuilder.Select(fieldNameResolver, fieldAlias, null);
             return this;
         }
 
