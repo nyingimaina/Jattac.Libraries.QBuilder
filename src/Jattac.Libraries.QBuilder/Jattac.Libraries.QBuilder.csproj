@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <Version>9.1.1</Version>
+    <Version>9.2.0</Version>
     <PackageId>Jattac.Libraries.QBuilder</PackageId>
     <Product>Jattac.Libraries.QBuilder</Product>
     <AssemblyName>Jattac.Libraries.QBuilder</AssemblyName>
@@ -21,10 +21,10 @@
     <PackageProjectUrl>https://github.com/nyingimaina/Jattac.Libraries.QBuilder</PackageProjectUrl>
     <Authors>Nyingi Maina</Authors>
     <Company>Jattac</Company>
-    <PackageDescription>A fully-fledged C# dialect of SQL — fluent, type-safe SELECT and DML (INSERT, UPDATE, DELETE) for .NET 6+. Covers every ANSI SQL clause with full identifier quoting for SQL Server, MySQL/MariaDB, SQLite, PostgreSQL, and ANSI Generic dialects. Configure once at startup via QBuilderConfig, use named configs for multiple databases. Produces parameterized SQL strings you execute with Dapper, ADO.NET, or any micro-ORM. Zero boilerplate, injection-safe, 174 tests.</PackageDescription>
+    <PackageDescription>A fully-fledged C# dialect of SQL — fluent, type-safe SELECT and DML (INSERT, UPDATE, DELETE) for .NET 6+. Covers every ANSI SQL clause with full identifier quoting for SQL Server, MySQL/MariaDB, SQLite, PostgreSQL, and ANSI Generic dialects. Configure once at startup via QBuilderConfig, use named configs for multiple databases. Produces parameterized SQL strings you execute with Dapper, ADO.NET, or any micro-ORM. Zero boilerplate, injection-safe, 255 tests. v9.2 adds POCO convenience: FromObject/FromObjects for INSERT/UPDATE/DELETE, QBatch for multi-statement round-trips, and QKey/QIgnore/QColumn attributes.</PackageDescription>
     <PackageTags>sql;query-builder;dapper;fluent;orm;linq;select;join;where;cte;paging;parameterized;mysql;mariadb;sqlserver;mssql;sqlite;postgres;postgresql;dialect</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v9.1.1 — Documentation. Added full docs for derived table queries: UseDerivedTableSelector, UseJoiner().UseDerivedTableJoiner&lt;T&gt;() (InnerJoin/LeftJoin/RightJoin/FullJoin against subqueries), and AggregateRowQuerierBuilder&lt;T&gt; (latest-row-per-group helper). Fixed Gaps section — removed false "gap" for UseDerivedTableSelector (it is fully supported). No code changes.</PackageReleaseNotes>
+    <PackageReleaseNotes>v9.2.0 — POCO convenience layer. FromObject(poco) on INSERT/UPDATE/DELETE reflects properties automatically. FromObjects(items) for multi-row bulk INSERT (single VALUES clause). QBatch combines multiple parameterized statements into one round-trip with automatic parameter collision renaming. New attributes: [QKey] routes property to WHERE on UPDATE/DELETE; [QIgnore] skips a property everywhere; [QColumn("name")] overrides the SQL column name. Shorthand methods InsertFrom/UpdateFrom/DeleteFrom on QBuilder. Anonymous object support. 81 new tests (255 total).</PackageReleaseNotes>
     <Copyright>Copyright © 2024 Nyingi Maina</Copyright>
   </PropertyGroup>
 

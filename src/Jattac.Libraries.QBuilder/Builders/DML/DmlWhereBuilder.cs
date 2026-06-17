@@ -121,6 +121,19 @@ namespace Jattac.Libraries.QBuilder.Builders.DML
             return Me;
         }
 
+        /// <summary>
+        /// Adds an AND WHERE [column] = [value] condition using a raw column name string
+        /// rather than an expression tree. For internal use by FromObject only.
+        /// Protected so derived builders can call it but external code cannot.
+        /// </summary>
+        protected TBuilder AndEqualToByName(string columnName, object value)
+        {
+            _wb.SetNextConjunction("And");
+            _wb.Where<TTable>(columnName, FilterOperator.EqualTo, value, _tableName);
+            HasWhere = true;
+            return Me;
+        }
+
         // ─── parentheses ──────────────────────────────────────────────────────────────
 
         public TBuilder OpenGroup() { _wb.OpenParentheses(); return Me; }

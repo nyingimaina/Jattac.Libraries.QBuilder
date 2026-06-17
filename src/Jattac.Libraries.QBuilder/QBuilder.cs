@@ -215,6 +215,24 @@ namespace Jattac.Libraries.QBuilder
         }
 
         /// <summary>
+        /// Convenience shorthand for <c>UseTableBoundInsert&lt;TTable&gt;().FromObject(obj)</c>.
+        /// </summary>
+        public TableBoundInsertBuilder<TTable> InsertFrom<TTable, T>(T obj) =>
+            UseTableBoundInsert<TTable>().FromObject(obj);
+
+        /// <summary>
+        /// Convenience shorthand for <c>UseTableBoundUpdate&lt;TTable&gt;().FromObject(obj)</c>.
+        /// </summary>
+        public TableBoundUpdateBuilder<TTable> UpdateFrom<TTable, T>(T obj) =>
+            UseTableBoundUpdate<TTable>().FromObject(obj);
+
+        /// <summary>
+        /// Convenience shorthand for <c>UseTableBoundDelete&lt;TTable&gt;().FromObject(obj)</c>.
+        /// </summary>
+        public TableBoundDeleteBuilder<TTable> DeleteFrom<TTable, T>(T obj) =>
+            UseTableBoundDelete<TTable>().FromObject(obj);
+
+        /// <summary>
         /// Gets the <see cref="DerivedTableSelector"/> instance for selecting from a derived table.
         /// </summary>
         /// <param name="derivedTable">The <see cref="QBuilder"/> instance representing the derived table.</param>

@@ -1,6 +1,7 @@
 namespace Jattac.Libraries.QBuilder.Builders.DML
 {
     using System;
+    using System.Collections.Generic;
     using Jattac.Libraries.QBuilder.Enums;
     using Jattac.Libraries.QBuilder.Helpers;
 
@@ -21,6 +22,39 @@ namespace Jattac.Libraries.QBuilder.Builders.DML
             : base(qBuilder, whereBuilder)
         {
             _builtQuery = builtQuery;
+        }
+
+        /// <summary>
+        /// Populates the WHERE clause from the [QKey] properties of a POCO.
+        /// Non-key and non-ignored properties are discarded — DELETE only needs the key.
+        /// For anonymous objects: no WHERE is generated; the existing no-WHERE guard will fire
+        /// at .Build() / .BuildWithParameters() unless you chain .WhereEqualTo(...) manually.
+        /// Throws if a named (non-anonymous) POCO has no [QKey] property.
+        /// </summary>
+        public TableBoundDeleteBuilder<TTable> FromObject<T>(T obj)
+        {
+            Guard.NotNull(obj, nameof(obj));
+
+            var props = PocoReflector.GetProperties(obj);
+            var isAnonymous = PocoReflector.IsAnonymousType(typeof(T));
+
+            var keys = new List<PocoReflector.PocoProperty>();
+            foreach (var p in props)
+            {
+                if (!p.IsIgnored && p.IsKey)
+                    keys.Add(p);
+            }
+
+            if (!isAnonymous && keys.Count == 0)
+                Guard.Against(true,
+                    "FromObject on DELETE requires at least one property decorated with [QKey] " +
+                    "to generate the WHERE clause. Decorate the primary key with [QKey], " +
+                    "or add WHERE conditions manually using .WhereEqualTo(...) etc.");
+
+            foreach (var p in keys)
+                AndEqualToByName(p.ColumnName, p.Value);
+
+            return this;
         }
 
         /// <summary>
