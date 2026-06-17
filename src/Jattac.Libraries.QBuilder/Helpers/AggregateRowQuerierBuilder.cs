@@ -4,7 +4,6 @@ namespace Jattac.Libraries.QBuilder.Helpers
     using System.Collections.Generic;
     using System.Linq.Expressions;
     using Jattac.Libraries.QBuilder.Models;
-    using Rocket.Libraries.Validation.Services;
 
     public class AggregateRowQuerierBuilder<THistoricalTable>
     {
@@ -137,11 +136,9 @@ namespace Jattac.Libraries.QBuilder.Helpers
 
         private void FailIfInvalid()
         {
-            new DataValidator()
-                .AddFailureCondition(string.IsNullOrEmpty(_foreignKeyName), $"Foreign key was not specified, cannot determine how to identify records to compare.", false)
-                .AddFailureCondition(string.IsNullOrEmpty(_incrementingFieldName), $"Cannot determine which field is being incremented. No way to tell which record is the latest.", false)
-                .AddFailureCondition(string.IsNullOrEmpty(_aggregationFunction), $"No aggregate function specified. Cannot query database", false)
-                .ThrowExceptionOnInvalidRules();
+            Guard.Against(string.IsNullOrEmpty(_foreignKeyName), "Foreign key was not specified, cannot determine how to identify records to compare.");
+            Guard.Against(string.IsNullOrEmpty(_incrementingFieldName), "Cannot determine which field is being incremented. No way to tell which record is the latest.");
+            Guard.Against(string.IsNullOrEmpty(_aggregationFunction), "No aggregate function specified. Cannot query database");
         }
 
         private void CacheDerivedTableJoinCall<TField>(Expression<Func<THistoricalTable, TField>> incrementingFieldNameResolver)

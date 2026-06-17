@@ -135,7 +135,7 @@ namespace Jattac.QBuilderTests
                 .UseTableBoundSelector<TestTable>()
                 .Select(x => x.Id)
                 .Then()
-                .UseFilter();
+                .UseTableBoundFilter<TestTable>();
 
             Assert.Throws<InvalidOperationException>(() => filter.WhereExplicitly("1=1"));
         }
@@ -147,7 +147,7 @@ namespace Jattac.QBuilderTests
                 .UseTableBoundSelector<TestTable>()
                 .Select(x => x.Id)
                 .Then()
-                .UseFilter()
+                .UseTableBoundFilter<TestTable>()
                 .WhereExplicitly("1=1")
                 .Then()
                 .Build();

@@ -2,8 +2,8 @@ namespace Jattac.Libraries.QBuilder.Builders.Paging
 {
     using System;
     using System.Linq.Expressions;
+    using Jattac.Libraries.QBuilder.Enums;
     using Jattac.Libraries.QBuilder.Helpers;
-    using Rocket.Libraries.Validation.Services;
 
     /// <summary>
     /// Implements SQL Server 2012+ / ANSI SQL <c>OFFSET … ROWS FETCH NEXT … ROWS ONLY</c> paging.
@@ -37,18 +37,19 @@ namespace Jattac.Libraries.QBuilder.Builders.Paging
             ushort pageSize,
             bool orderAscending = true)
         {
-            new DataValidator()
-                .AddFailureCondition(page < 1, $"Page '{page}' is invalid — pages must be >= 1.", false)
-                .AddFailureCondition(pageSize < 1, $"Page size '{pageSize}' is invalid — must be >= 1.", false)
-                .ThrowExceptionOnInvalidRules();
+            Guard.Range(page >= 1, nameof(page), $"Page '{page}' is invalid — pages must be >= 1.");
+            Guard.Range(pageSize >= 1, nameof(pageSize), $"Page size '{pageSize}' is invalid — must be >= 1.");
 
             var fieldName = new FieldNameResolver().GetFieldName(fieldNameDescriber);
             var outerAlias = QBuilder.DerivedTableName;
             var direction = orderAscending ? "Asc" : "Desc";
             var offset = (page - 1) * (long)pageSize;
+            var dialect = QBuilder.Dialect;
+            var qAlias = IdentifierQuoter.QuoteIdentifier(outerAlias, dialect);
+            var qField = IdentifierQuoter.QuoteIdentifier(fieldName, dialect);
 
             QBuilder.SetSuffix(
-                $"Order By {outerAlias}.{fieldName} {direction} " +
+                $"Order By {qAlias}.{qField} {direction} " +
                 $"Offset {offset} Rows Fetch Next {pageSize} Rows Only");
 
             return QBuilder;

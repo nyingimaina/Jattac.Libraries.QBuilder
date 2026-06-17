@@ -3,6 +3,7 @@ namespace Jattac.Libraries.QBuilder.Builders
     using System;
     using System.Collections.Generic;
     using System.Linq.Expressions;
+    using Jattac.Libraries.QBuilder.Enums;
     using Jattac.Libraries.QBuilder.Helpers;
     using Jattac.Libraries.QBuilder.Models;
 
@@ -56,11 +57,14 @@ namespace Jattac.Libraries.QBuilder.Builders
                 return string.Empty;
             }
 
+            var dialect = QBuilder.Dialect;
             var grouping = $"{Environment.NewLine} Group By ";
             foreach (var groupField in GroupFields)
             {
                 var alias = groupField.ExplicitAlias ?? QBuilder.TableNameAliaser.GetTableAlias(groupField.TableName);
-                grouping += $"{alias}.{groupField.FieldName},";
+                var qAlias = IdentifierQuoter.QuoteIdentifier(alias, dialect);
+                var qField = IdentifierQuoter.QuoteIdentifier(groupField.FieldName, dialect);
+                grouping += $"{qAlias}.{qField},";
             }
 
             return grouping.Substring(0, grouping.Length - 1) + Environment.NewLine;

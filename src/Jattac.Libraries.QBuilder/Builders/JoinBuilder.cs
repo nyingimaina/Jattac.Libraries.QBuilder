@@ -4,9 +4,9 @@ namespace Jattac.Libraries.QBuilder.Builders
     using System.Collections.Generic;
     using System.Linq;
     using System.Linq.Expressions;
+    using Jattac.Libraries.QBuilder.Enums;
     using Jattac.Libraries.QBuilder.Helpers;
     using Jattac.Libraries.QBuilder.Models;
-    using Rocket.Libraries.Validation.Services;
 
     public class JoinBuilder : BuilderBase
     {
@@ -26,7 +26,7 @@ namespace Jattac.Libraries.QBuilder.Builders
             get
             {
                 var firstJoin = Joins.FirstOrDefault();
-                DataValidator.EvaluateImmediate(firstJoin == null, "Could not find a join to use for first table");
+                Guard.Against(firstJoin == null, "Could not find a join to use for first table");
                 if (firstJoin.IsInitialDerivedTableJoin)
                 {
                     return firstJoin.RightTable;
@@ -323,12 +323,14 @@ namespace Jattac.Libraries.QBuilder.Builders
 
         private string GetNonDerivedTableJoinLine(JoinDescription joinDescription)
         {
+            var dialect = QBuilder.Dialect;
             var isCrossJoin = joinDescription.JoinType == JoinTypes.Cross;
             if (isCrossJoin)
             {
-                var leftAlias = joinDescription.RegularLeftAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.LeftTable);
-                var rightAlias = joinDescription.RegularRightAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
-                return $"Cross join {joinDescription.RightTable} {rightAlias}{Environment.NewLine}";
+                var crossRightAlias = joinDescription.RegularRightAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
+                var qCrossRight = IdentifierQuoter.QuoteTable(joinDescription.RightTable, dialect);
+                var qCrossRightAlias = IdentifierQuoter.QuoteIdentifier(crossRightAlias, dialect);
+                return $"Cross join {qCrossRight} {qCrossRightAlias}{Environment.NewLine}";
             }
 
             var hasExplicitAliases = !string.IsNullOrEmpty(joinDescription.RegularLeftAlias) && !string.IsNullOrEmpty(joinDescription.RegularRightAlias);
@@ -340,8 +342,13 @@ namespace Jattac.Libraries.QBuilder.Builders
             var joinPrefix = GetJoinPrefix(joinDescription);
             var resolvedLeftAlias = joinDescription.RegularLeftAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.LeftTable);
             var resolvedRightAlias = joinDescription.RegularRightAlias ?? QBuilder.TableNameAliaser.GetTableAlias(joinDescription.RightTable);
-            var line = $"{joinPrefix}join {joinDescription.LeftTable} {resolvedLeftAlias} on {resolvedLeftAlias}.{joinDescription.LeftField}";
-            line += $" = {resolvedRightAlias}.{joinDescription.RightField}{Environment.NewLine}";
+            var qLeft = IdentifierQuoter.QuoteTable(joinDescription.LeftTable, dialect);
+            var qLeftAlias = IdentifierQuoter.QuoteIdentifier(resolvedLeftAlias, dialect);
+            var qRightAlias = IdentifierQuoter.QuoteIdentifier(resolvedRightAlias, dialect);
+            var qLeftField = IdentifierQuoter.QuoteIdentifier(joinDescription.LeftField, dialect);
+            var qRightField = IdentifierQuoter.QuoteIdentifier(joinDescription.RightField, dialect);
+            var line = $"{joinPrefix}join {qLeft} {qLeftAlias} on {qLeftAlias}.{qLeftField}";
+            line += $" = {qRightAlias}.{qRightField}{Environment.NewLine}";
             return line;
         }
 
@@ -361,7 +368,7 @@ namespace Jattac.Libraries.QBuilder.Builders
             {
                 default:
                     var joinTypeIsUnsupported = true;
-                    DataValidator.EvaluateImmediate(joinTypeIsUnsupported, $"Unsupported join type '{joinDescription.JoinType}'");
+                    Guard.Against(joinTypeIsUnsupported, $"Unsupported join type '{joinDescription.JoinType}'");
                     break;
 
                 case JoinTypes.Full:
