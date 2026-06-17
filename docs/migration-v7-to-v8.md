@@ -211,3 +211,78 @@ v8 fixes `ConditionMaker` to store the raw value and let Dapper/ADO.NET handle t
 ## FieldNameResolver and [Column] attribute
 
 `TableBound*` builders resolve column names from the C# property name, **not** from a `[Column]` data annotation. If your model uses `[Column("some_column")]` but the property is named `SomeColumn`, the generated SQL uses `tTable.SomeColumn`. Apply a custom table/column name resolver via `Q.New(t => ...)` if you need a different mapping strategy.
+
+---
+
+## Picking a dialect (new in v8)
+
+Prior versions of this library produced unquoted, plain SQL identifiers with no way to configure quoting or paging strategy. v8 introduces a `Dialect` enum and a startup-time `QBuilderConfig` API so you can match the library's output to your target database once, globally, rather than manually quoting or hand-rolling paging in every query.
+
+### What a dialect controls
+
+| Concern | Effect |
+|---|---|
+| **Identifier quoting** | Wraps table names, aliases, and column names in the delimiter your database expects. Protects reserved-word clashes (e.g. `Order`, `User`). |
+| **`UsePageBy` strategy** | Dispatches to the correct paging syntax for the dialect — ROW_NUMBER() for SQL Server, LIMIT for MySQL/MariaDB, OFFSET/FETCH for everything else. |
+
+### Dialect reference
+
+| `Dialect` value | Quote style | Paging |
+|---|---|---|
+| `None` _(default)_ | no quoting | OFFSET / FETCH |
+| `SqlServer` / `MsSql` | `[brackets]` | ROW_NUMBER() |
+| `MySql` | `` `backticks` `` | LIMIT |
+| `MariaDb` | `` `backticks` `` | LIMIT |
+| `Sqlite` | `"double quotes"` | OFFSET / FETCH |
+| `Postgres` | `"double quotes"` | OFFSET / FETCH |
+| `Generic` | `"double quotes"` | OFFSET / FETCH |
+
+`Dialect.None` is the backward-compatible default — it produces the same unquoted SQL that older versions always generated, so existing call sites keep working without any change.
+
+### Registering a dialect at startup
+
+```csharp
+// Program.cs / Startup.cs — run once before any Q.New() call
+QBuilderConfig.ConfigureDefault(opt =>
+{
+    opt.Dialect = Dialect.SqlServer;
+});
+```
+
+After this, every `Q.New()` / `Q.New(parameterize: false)` call uses SQL Server quoting and paging automatically. No per-query change needed.
+
+### Multiple databases in one application
+
+If your application talks to more than one database engine, register a named configuration for each:
+
+```csharp
+QBuilderConfig.ConfigureDefault(opt => opt.Dialect = Dialect.SqlServer); // primary DB
+QBuilderConfig.Configure("reporting", opt => opt.Dialect = Dialect.Postgres); // read replica
+
+// Usage
+var q = Q.New();               // SqlServer
+var q = Q.New("reporting");    // Postgres
+```
+
+### Per-query override (without global config)
+
+For one-off cases you can pass a `QBuilderOptions` instance directly to `Q.New`:
+
+```csharp
+var sql = Q.New(new QBuilderOptions { Dialect = Dialect.MySql }, parameterize: false)
+    .UseTableBoundSelector<User>()
+    .Column(u => u.Name)
+    .Then()
+    .Build();
+// → Select `tUser`.`Name` From `User` `tUser`
+```
+
+### Which dialect should I pick?
+
+- **SQL Server / Azure SQL** → `Dialect.SqlServer` (or the alias `Dialect.MsSql`)
+- **MySQL** → `Dialect.MySql`
+- **MariaDB** → `Dialect.MariaDb`
+- **SQLite** → `Dialect.Sqlite`
+- **PostgreSQL** → `Dialect.Postgres`
+- **Other ANSI-compliant DB** → `Dialect.Generic`
+- **Legacy behaviour / no quoting needed** → `Dialect.None` (the default; no `QBuilderConfig` call required)
