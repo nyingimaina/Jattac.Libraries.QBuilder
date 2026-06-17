@@ -20,8 +20,9 @@ QBuilder sits in the middle: it is **purely a query builder**. It produces SQL s
 - **Startup configuration** — `QBuilderConfig.ConfigureDefault` + named configs follow the `IHttpClientFactory` pattern; `Q.New()` / `Q.New("name")` resolve the right config automatically
 - Full SQL coverage — SELECT, JOIN (5 types), WHERE, GROUP BY, HAVING, ORDER BY, paging (ROW_NUMBER, OFFSET/FETCH, LIMIT), UNION / INTERSECT / EXCEPT, CTEs, CASE WHEN, EXISTS, BETWEEN, IS NULL, IN
 - Full DML coverage — type-safe INSERT, UPDATE (with SET), DELETE, all with parameterized output and optional SQL logger; bare-table UPDATE/DELETE blocked by default
+- **POCO convenience** — `FromObject(poco)` on INSERT/UPDATE/DELETE reflects properties automatically; `[QKey]` / `[QIgnore]` / `[QColumn]` attributes control routing; `FromObjects(list)` for bulk multi-row insert; `QBatch` for multi-statement round-trips with automatic parameter collision renaming
 - Every public member has XML doc comments — your IDE guides you at every step
-- 174 unit + integration tests (including live SQLite), 0 failures
+- 255 unit + integration tests (including live SQLite), 0 failures
 
 ---
 
@@ -789,6 +790,66 @@ var q = Q.New()
     .BuildWithParameters(sql => logger.LogDebug("DML: {Sql}", sql));
 ```
 
+### POCO convenience — `FromObject` / `FromObjects` / `QBatch`
+
+Decorate your model once and skip the per-property boilerplate:
+
+```csharp
+using Jattac.Libraries.QBuilder.Attributes;
+
+public class User
+{
+    [QKey]                        // → WHERE on UPDATE/DELETE; inserted normally on INSERT
+    public Guid Id { get; set; }
+
+    [QColumn("user_name")]        // → SQL column name override (FromObject path only)
+    public string Name { get; set; }
+
+    [QIgnore]                     // → skipped everywhere
+    public bool InternalFlag { get; set; }
+}
+```
+
+```csharp
+// INSERT
+Q.New().UseTableBoundInsert<User>().FromObject(user).BuildWithParameters();
+
+// UPDATE — [QKey] → WHERE, rest → SET
+Q.New().UseTableBoundUpdate<User>().FromObject(user).BuildWithParameters();
+
+// DELETE — [QKey] → WHERE, everything else discarded
+Q.New().UseTableBoundDelete<User>().FromObject(user).BuildWithParameters();
+
+// Shorthand
+Q.New().InsertFrom<User, User>(user).BuildWithParameters();
+Q.New().UpdateFrom<User, User>(user).BuildWithParameters();
+Q.New().DeleteFrom<User, User>(user).BuildWithParameters();
+```
+
+**Bulk INSERT** — single `VALUES` clause for multiple rows:
+
+```csharp
+Q.New().UseTableBoundInsert<User>().FromObjects(users).BuildWithParameters();
+// → Insert Into User (Id, user_name) Values (@Id0, @Name0), (@Id1, @Name1), ...
+```
+
+**Batch DML** — multiple statements in one round-trip, parameters collision-renamed automatically:
+
+```csharp
+var batch = QBatch.New()
+    .AddRange(users.Select(u =>
+        Q.New().UseTableBoundUpdate<User>().FromObject(u).BuildWithParameters()))
+    .Build();
+
+conn.Execute(batch.ParameterizedSql, batch.Parameters);
+```
+
+Anonymous objects work with `FromObject` — since they carry no attributes, all properties are treated as regular values. For UPDATE/DELETE on anonymous objects, chain the WHERE clause manually.
+
+See [`docs/migration-v7-to-v8.md`](docs/migration-v7-to-v8.md) for full attribute reference, DB-generated key patterns, chunking guidance, and `WhereIn` for bulk delete.
+
+---
+
 ### DML pitfalls and best practices
 
 **Always use `Q.New()` (parameterized mode) for DML.** Embedding user-supplied values in a raw INSERT / UPDATE is as dangerous as raw SELECT.
@@ -850,7 +911,7 @@ public class MyTests : IDisposable
 
 ### `[Column]` attributes are ignored
 
-`TableBound*` builders resolve column names from the **C# property name**, not from `[Column]` data annotations. If your model has `[Column("is_active")]` on a property named `IsActive`, the generated SQL uses `IsActive`. Use a custom `TableNameResolver` at the options level if you need different column naming.
+`TableBound*` builders resolve column names from the **C# property name**, not from EF/DataAnnotations `[Column]` attributes. If your model has `[Column("is_active")]` on a property named `IsActive`, the generated SQL uses `IsActive`. Use QBuilder's own `[QColumn("is_active")]` attribute if you need an alias — it is respected by the `FromObject` path. The expression-based fluent path (`Value(u => u.IsActive, ...)`) always uses the C# property name regardless.
 
 ### Explicit aliases in self-joins bypass quoting
 
@@ -1000,7 +1061,7 @@ Jattac.Libraries.QBuilder is the renamed successor to `Rocket.Libraries.QBuilder
 <PackageReference Include="Rocket.Libraries.QBuilder" Version="*" />
 
 <!-- After -->
-<PackageReference Include="Jattac.Libraries.QBuilder" Version="9.1.0" />
+<PackageReference Include="Jattac.Libraries.QBuilder" Version="9.2.0" />
 ```
 
 **Step 2 — update namespace imports**
@@ -1022,7 +1083,6 @@ Then migrate the call sites using the v8 `TableBound*` API — see [`docs/migrat
 - **Window functions** — LAG, LEAD, RANK, DENSE_RANK, ROW_NUMBER OVER (PARTITION BY), SUM OVER are planned. The ROW_NUMBER paging infrastructure already exists; the full window-function surface will be layered on top.
 - **Multi-table UPDATE / MERGE** — `UPDATE t1 JOIN t2` (MySQL) and `MERGE` (SQL Server) are not currently supported. Use raw parameterized SQL for these.
 - **DDL** — CREATE TABLE, ALTER TABLE, CREATE INDEX are not in scope. QBuilder is a query builder, not a schema migration tool.
-- **Batch / bulk INSERT** — inserting multiple rows in one statement is not yet supported. Call `UseTableBoundInsert<T>()` once per row and wrap in a transaction.
 - **Correlated subqueries in SELECT list** — scalar subqueries in the SELECT column list (e.g. `(SELECT COUNT(*) FROM …)`) are not yet supported. Use a JOIN or CTE instead.
 
 ---
