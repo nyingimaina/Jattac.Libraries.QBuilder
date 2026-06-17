@@ -6,6 +6,115 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [9.1.1] — 2026-06-17
+
+### Documentation
+
+- **Derived table queries** — new section documenting `UseDerivedTableSelector` (selecting columns from a subquery in the FROM clause), `UseJoiner().UseDerivedTableJoiner<T>()` (joining a derived table against an outer table; all four join types — `InnerJoin`, `LeftJoin`, `RightJoin`, `FullJoin`), and chaining multiple derived table joins on the same builder.
+- **`AggregateRowQuerierBuilder<T>`** — new section documenting the latest-row-per-group helper: `SetAggregationFunction`, `SetForeignKeyResolver`, `SetIncrementingFieldName`, `AddWhereEqualsToFilter` / `AddWhereInFilter`, `Build()`.
+- **Gaps section corrected** — removed the false entry that listed `UseDerivedTableSelector` as an unimplemented gap. Replaced with an accurate entry for correlated subqueries in the SELECT list (which are genuinely not yet supported).
+
+No code changes — this is a documentation-only release.
+
+---
+
+## [9.1.0] — 2026-06-16
+
+### Added
+
+- **`Dialect` enum** — `None` (backward-compat default, no quoting), `SqlServer` / `MsSql` (bracket `[…]` quoting, ROW_NUMBER paging), `MySql` / `MariaDb` (backtick `` `…` `` quoting, LIMIT paging), `Sqlite`, `Postgres`, `Generic` (double-quote `"…"` quoting, OFFSET/FETCH paging). `MsSql` is a value alias for `SqlServer`.
+
+- **`QBuilderOptions`** — configuration object holding `Dialect`, `TableNameResolver`, and `AliasPrefix`. Drives identifier quoting and paging strategy for a `QBuilder` instance.
+
+- **`QBuilderConfig`** static API — modelled after `IHttpClientFactory` named-client pattern:
+  - `QBuilderConfig.ConfigureDefault(opt => ...)` — set the application-wide default once at startup.
+  - `QBuilderConfig.Configure("name", opt => ...)` — register named configurations for different databases, schemas, or read replicas.
+  - `QBuilderConfig.Reset()` — restore factory defaults (test-isolation helper).
+
+- **`Q.New()` overloads**:
+  - `Q.New()` / `Q.New(parameterize: false)` — reads from the configured default.
+  - `Q.New("name")` / `Q.New("name", false)` — reads from a named config.
+  - `Q.New(QBuilderOptions options)` — creates a QBuilder from an inline options object, bypassing the registry.
+  - `Q.New(Func<Type, string> resolver)` — existing inline resolver overload retained (backward compat).
+
+- **`IdentifierQuoter`** (internal) — single quoting helper used by every builder. `QuoteTable` handles schema-qualified names (`dbo.Users` → `[dbo].[Users]`). `QuoteIdentifier` quotes a single part.
+
+- **Identifier quoting in all builders** — quoting is applied wherever a table name, alias, or column name is emitted, for every SQL clause: SELECT column list, FROM table + alias, JOIN … ON, WHERE field references, ORDER BY, GROUP BY, DML table names, INSERT column list, UPDATE SET clause. `Dialect.None` is a strict no-op so all existing code and tests are unaffected.
+
+- **`QBuilder.UsePageBy<TTable, TField>(fieldSelector, page, pageSize, ascending)`** — dialect-aware paging facade: dispatches to `UseSqlServerPagingBuilder` (SqlServer/MsSql), `UseMySqlServerPagingBuilder` (MySql/MariaDb), or `UseOffsetFetchPagingBuilder` (all others). Explicit dialect-specific paging methods are retained.
+
+- **23 new tests** — `DialectAndConfigTests.cs` covers all six dialects, config registry isolation, reset, `Q.New` overloads, `UsePageBy` dispatch, DML quoting, and WHERE clause quoting. Total: **174 tests**.
+
+### Architecture
+
+Dialect flows via `QBuilder._options` (set once at construction, read by every builder through `QBuilder.Dialect`). No builder constructor was changed — zero breaking change surface.
+
+---
+
+## [9.0.0] — 2026-06-16
+
+### Added
+
+- **`TableBoundDeleteBuilder<T>`** — fluent DELETE builder. `Q.New(true).UseTableBoundDelete<T>().WhereEqualTo(...).BuildWithParameters()` produces Dapper-ready parameterized SQL. Bare-table delete (no WHERE) is blocked by default; call `.ForEntireTable()` to opt out.
+- **`TableBoundUpdateBuilder<T>`** — fluent UPDATE builder. Chain `.Set(col, value)` calls followed by `.WhereEqualTo(...)` then `.BuildWithParameters()`. Bare-table update (no WHERE) is blocked by default; call `.ForEntireTable()` to opt out.
+- **`TableBoundInsertBuilder<T>`** — fluent INSERT builder. Chain `.Value(col, value)` calls then `.BuildWithParameters()`. Emits `INSERT INTO {table} (cols) VALUES (params)`.
+- All three builders:
+  - Accept an optional `Action<string> logSql` delegate on `BuildWithParameters()` — receives the generated SQL for logging (consistent with the existing `QBuilder.BuildWithParameters(Action<string>)` overload).
+  - Also expose `.Build()` returning a raw SQL `string` for non-parameterized contexts.
+  - Expose the full WHERE predicate family (`WhereEqualTo`/`And*/Or*`, `WhereBetween`, `WhereIn`, `WhereIsNull`, `WhereExists`, `OpenGroup`/`CloseGroup`, etc.) via the shared `DmlWhereBuilder<TTable, TBuilder>` CRTP base — WHERE predicates use the actual table name as the column qualifier (`User.Id`) rather than the SELECT alias (`tUser.Id`).
+- Entry points on `QBuilder`: `UseTableBoundDelete<T>()`, `UseTableBoundUpdate<T>()`, `UseTableBoundInsert<T>()` — follow the same factory pattern as all other `UseTableBound*` methods.
+- 19 new tests (9 contract/guard, 10 SQLite integration).
+
+### Architecture
+
+DML builders are **terminal builders** — they produce `BuiltQuery` directly and do not chain back through `QBuilder.Build()`. The shared `DmlWhereBuilder<TTable, TBuilder>` abstract base uses the CRTP pattern so all WHERE methods return the correct concrete type, keeping the Dapper call as the last step: `conn.Execute(q.ParameterizedSql, q.Parameters)`.
+
+---
+
+## [8.0.1] — 2026-06-16
+
+### Changed
+
+- **Replaced `Rocket.Libraries.Validation 2.0.0-beta05` with an internal `Guard` class.** The prerelease dependency has been removed entirely. All validation is now handled by `Guard.Against` (`InvalidOperationException`), `Guard.NotNull` (`ArgumentNullException`), and `Guard.Range` (`ArgumentOutOfRangeException`) — standard .NET exception types that callers can catch without any additional dependency.
+- **Improved exception types for null and range checks.** Null filter values now throw `ArgumentNullException` instead of a custom `FailedValidationException`. Invalid page/pageSize values now throw `ArgumentOutOfRangeException`. All builder-state invariants continue to throw `InvalidOperationException`.
+
+### Fixed
+
+- 11 `CA2000` (`IDisposable` not disposed) warnings eliminated — `DataValidator` was instantiated inline and never disposed at every call site.
+- `NU5104` warning eliminated — stable NuGet packages cannot depend on prerelease packages; the dependency is now gone.
+
+---
+
+## [8.0.0] — 2026-06-16
+
+### Breaking changes
+
+- **`QBuilderExtensions` removed.** All `Select<T,F>()`, `Where<T,F>()`, `AndWhere<T,F>()`, `Having<T,F>()`, `GroupBy<T,F>()`, `OrderBy<T,F>()`, `InnerJoin<TL,TR,KL,KR>()`, `PageSqlServer<T,F>()`, `PageOffsetFetch<T,F>()`, and related extension methods on `QBuilder` are deleted. Migrate to the `TableBound*` builder API — see `docs/migration-v7-to-v8.md` for the full method-by-method mapping.
+- **`WhereConjunctionBuilder` is now `internal`.** Code that held a `WhereConjunctionBuilder` variable must switch to chaining on `TableBoundWhereBuilder<T>`.
+- **`UseFilter()` and `UseHaving()` are now `internal`.** Use `UseTableBoundFilter<T>()` and `UseTableBoundHaving<T>()`.
+
+### Added
+
+- **Full `And*`/`Or*` predicate family on `TableBoundWhereBuilder<T>`.** Every base predicate now has `And*` and `Or*` variants: `AndWhereEqualTo`/`OrWhereEqualTo`, `AndWhereLessThan`/`OrWhereLessThan`, `AndWhereGreaterThan`/`OrWhereGreaterThan`, `AndWhereContains`/`OrWhereContains`, `AndWhereStartsWith`/`OrWhereStartsWith`, `AndWhereEndsWith`/`OrWhereEndsWith`, `AndWhereIsNull`/`OrWhereIsNull`, `AndWhereIsNotNull`/`OrWhereIsNotNull`, `AndWhereIn`/`OrWhereIn`, `AndWhereNotIn`/`OrWhereNotIn`, `AndWhereBetween`/`OrWhereBetween`, `AndWhereNotBetween`/`OrWhereNotBetween`, `AndWhereExists`/`OrWhereExists`, `AndWhereNotExists`/`OrWhereNotExists`. All return `TableBoundWhereBuilder<T>` for fluent chaining.
+- **`WhereBetween` / `WhereNotBetween` on `TableBoundWhereBuilder<T>`.** Full And*/Or* variants.
+- **`WhereExists(QBuilder)` / `WhereNotExists(QBuilder)` on `TableBoundWhereBuilder<T>`.** Pass a sub-`QBuilder` as the EXISTS subquery. Full And*/Or* variants.
+- **`TableBoundHavingBuilder<T>`.** New builder exposing the same predicate surface as `TableBoundWhereBuilder<T>` but targeting the `HAVING` clause. Access via `qb.UseTableBoundHaving<T>()`.
+- **`TableBoundOrderByBuilder<T>`.** New builder for type-safe ORDER BY: `Ascending(expr)`, `Descending(expr)`, `ThenAscending(expr)`, `ThenDescending(expr)`. Access via `qb.UseTableBoundOrderBy<T>()`.
+- **`.If(condition, builder)` on `TableBoundWhereBuilder<T>`.** Conditionally apply a filter branch without breaking the fluent chain.
+- **`BuildWithParameters(Action<string> logSql)` overload.** Optional debug hook — the generated SQL is passed to the delegate before returning the `BuiltQuery`.
+- **`OpenGroup()` / `CloseGroup()` aliases** on `TableBoundWhereBuilder<T>` (renamed from `OpenParentheses`/`CloseParentheses`).
+- **19 SQLite integration tests** covering `And*`/`Or*` families, `.If()`, `WhereBetween`, `WhereExists`/`WhereNotExists`, `TableBoundOrderByBuilder<T>`, and `TableBoundHavingBuilder<T>`.
+
+### Fixed
+
+- **Parameterized bool comparison (`ConditionMaker`).** `ConditionMaker.GetCondition` previously called `value.ToString()` for the default operator case, converting C# `true`/`false` to strings `"True"`/`"False"`. These strings fail comparison against INTEGER columns. Now stores the raw `object` value so ADO.NET/Dapper handles type conversion correctly (`true` → `1`, `false` → `0`).
+
+### Internal
+
+- `WhereConjuntionBuilder.cs` filename typo fixed → `WhereConjunctionBuilder.cs`.
+
+---
+
 ## [7.0.0-rc2] — 2026-06-14
 
 ### Added

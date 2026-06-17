@@ -4,6 +4,7 @@ namespace Jattac.Libraries.QBuilder.Builders
     using System.Collections.Generic;
     using System.Linq;
     using System.Linq.Expressions;
+    using Jattac.Libraries.QBuilder.Enums;
     using Jattac.Libraries.QBuilder.Helpers;
     using Jattac.Libraries.QBuilder.Models;
 
@@ -105,9 +106,20 @@ namespace Jattac.Libraries.QBuilder.Builders
                 return string.Empty;
             }
 
+            var dialect = QBuilder.Dialect;
             var columns = string.Join(", ", _orders.Select(o =>
             {
-                var col = o.QualifyWithTableName ? $"{o.TableAlias}.{o.Field}" : o.Field;
+                string col;
+                if (o.QualifyWithTableName)
+                {
+                    var qAlias = IdentifierQuoter.QuoteIdentifier(o.TableAlias, dialect);
+                    var qField = IdentifierQuoter.QuoteIdentifier(o.Field, dialect);
+                    col = $"{qAlias}.{qField}";
+                }
+                else
+                {
+                    col = IdentifierQuoter.QuoteIdentifier(o.Field, dialect);
+                }
                 return $"{col} {o.Mode}";
             }));
 

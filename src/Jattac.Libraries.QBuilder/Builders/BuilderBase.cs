@@ -1,7 +1,5 @@
 namespace Jattac.Libraries.QBuilder.Builders
 {
-    using Rocket.Libraries.Validation.Services;
-
     public abstract class BuilderBase
     {
         public BuilderBase(QBuilder qBuilder)
@@ -10,8 +8,6 @@ namespace Jattac.Libraries.QBuilder.Builders
         }
 
         protected QBuilder QBuilder { get; }
-
-        protected DataValidator DataValidator { get; } = new DataValidator();
 
         public virtual QBuilder Then()
         {

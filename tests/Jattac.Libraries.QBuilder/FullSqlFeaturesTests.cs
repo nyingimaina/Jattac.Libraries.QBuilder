@@ -9,8 +9,7 @@ using Xunit;
 namespace Jattac.QBuilderTests
 {
     /// <summary>
-    /// Tests for every new SQL feature added in v7.0:
-    /// IS NULL / IS NOT NULL, BETWEEN, EXISTS, nested groups, HAVING, CTE, set ops, CASE WHEN, CROSS JOIN.
+    /// Tests for every SQL feature: IS NULL, BETWEEN, EXISTS, nested groups, HAVING, CTE, set ops, CASE WHEN, CROSS JOIN.
     /// </summary>
     public class FullSqlFeaturesTests
     {
@@ -24,7 +23,7 @@ namespace Jattac.QBuilderTests
         {
             var sql = new QBuilder(parameterize: false)
                 .UseSelector().Select<Order>("Id").Then()
-                .UseFilter().WhereIsNull<Order>("DeletedAt")
+                .UseTableBoundFilter<Order>().WhereIsNull(o => o.DeletedAt)
                 .Then().Build();
 
             Assert.Contains("IS NULL", sql);
@@ -36,7 +35,7 @@ namespace Jattac.QBuilderTests
         {
             var sql = new QBuilder(parameterize: false)
                 .UseSelector().Select<Order>("Id").Then()
-                .UseFilter().WhereIsNotNull<Order>("DeletedAt")
+                .UseTableBoundFilter<Order>().WhereIsNotNull(o => o.DeletedAt)
                 .Then().Build();
 
             Assert.Contains("IS NOT NULL", sql);
@@ -45,12 +44,11 @@ namespace Jattac.QBuilderTests
         [Fact]
         public void WhereIsNull_DoesNotRequireValue()
         {
-            // Should not throw even though no value is supplied
             var exception = Record.Exception(() =>
             {
                 new QBuilder(parameterize: false)
                     .UseSelector().Select<Order>("Id").Then()
-                    .UseFilter().WhereIsNull<Order>("DeletedAt")
+                    .UseTableBoundFilter<Order>().WhereIsNull(o => o.DeletedAt)
                     .Then().Build();
             });
             Assert.Null(exception);
@@ -63,7 +61,7 @@ namespace Jattac.QBuilderTests
         {
             var sql = new QBuilder(parameterize: false)
                 .UseSelector().Select<Order>("Amount").Then()
-                .UseFilter().WhereBetween<Order>("Amount", 10, 100)
+                .UseTableBoundFilter<Order>().WhereBetween(o => o.Amount, 10, 100)
                 .Then().Build();
 
             Assert.Contains("Between", sql);
@@ -76,7 +74,7 @@ namespace Jattac.QBuilderTests
         {
             var sql = new QBuilder(parameterize: false)
                 .UseSelector().Select<Order>("Amount").Then()
-                .UseFilter().WhereNotBetween<Order>("Amount", 200, 500)
+                .UseTableBoundFilter<Order>().WhereNotBetween(o => o.Amount, 200, 500)
                 .Then().Build();
 
             Assert.Contains("Not Between", sql);
@@ -87,7 +85,7 @@ namespace Jattac.QBuilderTests
         {
             var result = new QBuilder(parameterize: true)
                 .UseSelector().Select<Order>("Amount").Then()
-                .UseFilter().WhereBetween<Order>("Amount", 10, 100)
+                .UseTableBoundFilter<Order>().WhereBetween(o => o.Amount, 10, 100)
                 .Then().BuildWithParameters();
 
             Assert.Equal(2, result.Parameters.Count);
@@ -102,12 +100,11 @@ namespace Jattac.QBuilderTests
         {
             var subQuery = new QBuilder(parameterize: false)
                 .UseSelector().Select<Order>("Id").Then()
-                .UseFilter().Where<Order>("Status", FilterOperator.EqualTo, "active")
-                .Then();
+                .UseTableBoundFilter<Order>().WhereEqualTo(o => o.Status, "active").Then();
 
             var sql = new QBuilder(parameterize: false)
                 .UseSelector().Select<User>("Id").Then()
-                .UseFilter().WhereExists(subQuery)
+                .UseTableBoundFilter<User>().WhereExists(subQuery)
                 .Then().Build();
 
             Assert.Contains("Exists (", sql);
@@ -121,7 +118,7 @@ namespace Jattac.QBuilderTests
 
             var sql = new QBuilder(parameterize: false)
                 .UseSelector().Select<User>("Id").Then()
-                .UseFilter().WhereNotExists(subQuery)
+                .UseTableBoundFilter<User>().WhereNotExists(subQuery)
                 .Then().Build();
 
             Assert.Contains("Not Exists (", sql);
@@ -136,10 +133,10 @@ namespace Jattac.QBuilderTests
             {
                 new QBuilder(parameterize: false)
                     .UseSelector().Select<Order>("Status").Then()
-                    .UseFilter()
-                        .OpenParentheses()
-                            .Where<Order>("Status", FilterOperator.EqualTo, "new")
-                        .CloseParentheses()
+                    .UseTableBoundFilter<Order>()
+                        .OpenGroup()
+                        .WhereEqualTo(o => o.Status, "new")
+                        .CloseGroup()
                     .Then().Build();
             });
             Assert.Null(exception);
@@ -150,14 +147,12 @@ namespace Jattac.QBuilderTests
         {
             var sql = new QBuilder(parameterize: false)
                 .UseSelector().Select<Order>("Status").Then()
-                .UseFilter()
-                    .Where<Order>("Status", FilterOperator.EqualTo, "new")
-                    .And()
-                    .OpenParentheses()
-                        .Where<Order>("Amount", FilterOperator.GreaterThan, 50)
-                        .Or()
-                        .Where<Order>("Amount", FilterOperator.LessThan, 5)
-                    .CloseParentheses()
+                .UseTableBoundFilter<Order>()
+                    .WhereEqualTo(o => o.Status, "new")
+                    .OpenGroup()
+                    .WhereGreaterThan(o => o.Amount, 50)
+                    .OrWhereLessThan(o => o.Amount, 5)
+                    .CloseGroup()
                 .Then().Build();
 
             Assert.Contains("(", sql);
@@ -173,7 +168,7 @@ namespace Jattac.QBuilderTests
             var sql = new QBuilder(parameterize: false)
                 .UseSelector().SelectAggregated<Order>("Amount", "Total", "Sum").Then()
                 .UseGrouper().GroupBy<Order>("UserId").Then()
-                .UseHaving().Where<Order>("Amount", FilterOperator.GreaterThan, 100)
+                .UseTableBoundHaving<Order>().HavingGreaterThan(o => o.Amount, 100)
                 .Then().Build();
 
             var normalized = Norm(sql);
@@ -190,7 +185,7 @@ namespace Jattac.QBuilderTests
             var result = new QBuilder(parameterize: true)
                 .UseSelector().SelectAggregated<Order>("Amount", "Total", "Sum").Then()
                 .UseGrouper().GroupBy<Order>("UserId").Then()
-                .UseHaving().Where<Order>("Amount", FilterOperator.GreaterThan, 500)
+                .UseTableBoundHaving<Order>().HavingGreaterThan(o => o.Amount, 500)
                 .Then().BuildWithParameters();
 
             Assert.Contains("@Amount", result.ParameterizedSql);
@@ -397,7 +392,6 @@ namespace Jattac.QBuilderTests
             var qb = Q.New(t => "dbo." + t.Name, parameterize: false);
             qb.UseSelector().Select<User>("Id");
             var sql = qb.Build();
-            // alias must be "tUser" not "tdbo.User"
             Assert.Contains("tUser", sql);
             Assert.DoesNotContain("tdbo", sql);
         }

@@ -11,7 +11,7 @@ namespace Jattac.Libraries.QBuilder.Builders
     /// qb.UseHaving().Where&lt;Order&gt;("Amount", FilterOperator.GreaterThan, 100);
     /// </code>
     /// </example>
-    public class HavingBuilder : WhereBuilder
+    internal class HavingBuilder : WhereBuilder
     {
         /// <summary>Initializes a new <see cref="HavingBuilder"/> attached to <paramref name="qBuilder"/>.</summary>
         public HavingBuilder(QBuilder qBuilder, BuiltQuery builtQuery = null)

@@ -2,11 +2,14 @@ namespace Jattac.Libraries.QBuilder
 {
 
     using System.Collections.Generic;
+    using System.Linq.Expressions;
     using Jattac.Libraries.QBuilder.Builders;
+    using Jattac.Libraries.QBuilder.Builders.DML;
     using Jattac.Libraries.QBuilder.Builders.Paging;
+    using Jattac.Libraries.QBuilder.Config;
     using Jattac.Libraries.QBuilder.Enums;
     using Jattac.Libraries.QBuilder.Models;
-    using Rocket.Libraries.Validation.Services;
+    using Jattac.Libraries.QBuilder.Helpers;
     using System;
 
     /// <summary>
@@ -38,32 +41,31 @@ namespace Jattac.Libraries.QBuilder
 
         private List<SetOperationDescription> _setOperations = new List<SetOperationDescription>();
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="QBuilder"/> class with the parameterization option.
-        /// </summary>
-        /// <param name="parameterize">Determines whether the query should be parameterized for secure parameter binding.</param>
+        private QBuilderOptions _options;
+
+        /// <summary>Initializes a new <see cref="QBuilder"/> using the default type-name resolver.</summary>
         public QBuilder(bool parameterize)
-            : this("t", parameterize)
-
+            : this(new QBuilderOptions(), parameterize)
         {
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="QBuilder"/> class with the specified alias table name and parameterization option.
-        /// </summary>
-        /// <param name="aliasTablename">The alias for the main table in the query.</param>
-        /// <param name="parameterize">Determines whether the query should be parameterized for secure parameter binding.</param>
+        /// <summary>Initializes a new <see cref="QBuilder"/> with a custom table-alias prefix.</summary>
         public QBuilder(string aliasTablename, bool parameterize)
-            : this(t => t.Name, aliasTablename, parameterize)
-
+            : this(new QBuilderOptions { AliasPrefix = aliasTablename }, parameterize)
         {
         }
 
+        /// <summary>Initializes a new <see cref="QBuilder"/> with a custom table-name resolver and alias prefix.</summary>
         public QBuilder(Func<Type, string> tableNameResolver, string aliasTablename, bool parameterize)
+            : this(new QBuilderOptions { TableNameResolver = tableNameResolver, AliasPrefix = aliasTablename }, parameterize)
         {
-            TableNameResolver = tableNameResolver;
-            _aliasTableName = aliasTablename;
-            TableNameAliaser = new TableNameAliaser(tableNameResolver);
+        }
+
+        internal QBuilder(QBuilderOptions options, bool parameterize)
+        {
+            _options = options;
+            _aliasTableName = options.AliasPrefix;
+            TableNameAliaser = new TableNameAliaser(options.TableNameResolver);
             _orderBuilder = new OrderBuilder(this);
             _selectBuilder = new SelectBuilder(this, "t");
             _joinBuilder = new JoinBuilder(this);
@@ -87,7 +89,11 @@ namespace Jattac.Libraries.QBuilder
 
         internal InnerSelectDescription InnerSelectDescription { get; set; }
 
-        internal Func<Type, string> TableNameResolver { get; set; }
+        internal Func<Type, string> TableNameResolver => _options.TableNameResolver;
+
+        internal Dialect Dialect => _options.Dialect;
+
+        internal bool IsParameterized => builtQuery != null;
 
         internal string FirstTableName
         {
@@ -104,7 +110,6 @@ namespace Jattac.Libraries.QBuilder
             }
         }
 
-        private DataValidator DataValidator { get; } = new DataValidator();
 
         /// <summary>
         /// Gets the <see cref="SelectBuilder"/> instance for constructing the SELECT clause of the query.
@@ -158,6 +163,58 @@ namespace Jattac.Libraries.QBuilder
         }
 
         /// <summary>
+        /// Gets the <see cref="TableBoundHavingBuilder{TTable}"/> instance for constructing the HAVING clause for a specific table.
+        /// Call after <c>UseTableBoundGrouper&lt;T&gt;</c>.
+        /// </summary>
+        public TableBoundHavingBuilder<TTable> UseTableBoundHaving<TTable>()
+        {
+            return new TableBoundHavingBuilder<TTable>(_havingBuilder, this);
+        }
+
+        /// <summary>
+        /// Gets the <see cref="TableBoundOrderByBuilder{TTable}"/> instance for constructing the ORDER BY clause for a specific table.
+        /// </summary>
+        public TableBoundOrderByBuilder<TTable> UseTableBoundOrderBy<TTable>()
+        {
+            return new TableBoundOrderByBuilder<TTable>(this);
+        }
+
+        /// <summary>
+        /// Returns a <see cref="TableBoundDeleteBuilder{TTable}"/> for building a DELETE statement against <typeparamref name="TTable"/>.
+        /// A WHERE clause is required by default — call <c>.ForEntireTable()</c> to explicitly delete all rows.
+        /// Call <c>.BuildWithParameters()</c> on the returned builder for Dapper-ready output.
+        /// </summary>
+        public TableBoundDeleteBuilder<TTable> UseTableBoundDelete<TTable>()
+        {
+            var dmlQuery = IsParameterized ? new BuiltQuery() : null;
+            var wb = new WhereBuilder(this, dmlQuery);
+            return new TableBoundDeleteBuilder<TTable>(this, wb, dmlQuery);
+        }
+
+        /// <summary>
+        /// Returns a <see cref="TableBoundUpdateBuilder{TTable}"/> for building an UPDATE statement against <typeparamref name="TTable"/>.
+        /// At least one <c>.Set(col, value)</c> call and a WHERE clause are required by default.
+        /// Call <c>.BuildWithParameters()</c> on the returned builder for Dapper-ready output.
+        /// </summary>
+        public TableBoundUpdateBuilder<TTable> UseTableBoundUpdate<TTable>()
+        {
+            var dmlQuery = IsParameterized ? new BuiltQuery() : null;
+            var wb = new WhereBuilder(this, dmlQuery);
+            return new TableBoundUpdateBuilder<TTable>(this, wb, dmlQuery);
+        }
+
+        /// <summary>
+        /// Returns a <see cref="TableBoundInsertBuilder{TTable}"/> for building an INSERT statement into <typeparamref name="TTable"/>.
+        /// At least one <c>.Value(col, value)</c> call is required.
+        /// Call <c>.BuildWithParameters()</c> on the returned builder for Dapper-ready output.
+        /// </summary>
+        public TableBoundInsertBuilder<TTable> UseTableBoundInsert<TTable>()
+        {
+            var dmlQuery = IsParameterized ? new BuiltQuery() : null;
+            return new TableBoundInsertBuilder<TTable>(this, dmlQuery);
+        }
+
+        /// <summary>
         /// Gets the <see cref="DerivedTableSelector"/> instance for selecting from a derived table.
         /// </summary>
         /// <param name="derivedTable">The <see cref="QBuilder"/> instance representing the derived table.</param>
@@ -199,6 +256,26 @@ namespace Jattac.Libraries.QBuilder
         }
 
         /// <summary>
+        /// Applies paging using the SQL dialect configured for this <see cref="QBuilder"/> instance.
+        /// Automatically dispatches to ROW_NUMBER (SqlServer), LIMIT (MySql), or OFFSET/FETCH (all others).
+        /// </summary>
+        /// <typeparam name="TTable">The table whose field drives the ORDER BY clause.</typeparam>
+        /// <typeparam name="TField">The field type.</typeparam>
+        /// <param name="fieldSelector">Lambda selecting the ORDER BY field, e.g. <c>u => u.Name</c>.</param>
+        /// <param name="page">1-based page number.</param>
+        /// <param name="pageSize">Number of rows per page (minimum 1).</param>
+        /// <param name="ascending"><c>true</c> for ASC (default); <c>false</c> for DESC.</param>
+        public QBuilder UsePageBy<TTable, TField>(Expression<Func<TTable, TField>> fieldSelector, uint page, ushort pageSize, bool ascending = true)
+        {
+            return Dialect switch
+            {
+                Dialect.SqlServer => UseSqlServerPagingBuilder<TTable>().PageBy(fieldSelector, page, pageSize, ascending),
+                Dialect.MySql or Dialect.MariaDb => UseMySqlServerPagingBuilder<TTable>().PageBy(fieldSelector, page, pageSize, ascending),
+                _ => UseOffsetFetchPagingBuilder<TTable>().PageBy(fieldSelector, page, pageSize, ascending),
+            };
+        }
+
+        /// <summary>
         /// Gets the <see cref="IPagingBuilder{TTable}"/> instance for constructing paging logic using a custom paging builder.
         /// </summary>
         /// <typeparam name="TTable">The type of the table to apply paging to.</typeparam>
@@ -224,7 +301,7 @@ namespace Jattac.Libraries.QBuilder
         /// Gets the <see cref="WhereBuilder"/> instance for constructing the WHERE clause of the query.
         /// </summary>
         /// <returns>The <see cref="WhereBuilder"/> instance.</returns>
-        public WhereBuilder UseFilter()
+        internal WhereBuilder UseFilter()
         {
             return _whereBuilder;
         }
@@ -252,7 +329,7 @@ namespace Jattac.Libraries.QBuilder
         /// Must be used after <see cref="UseGrouper"/> has added at least one GROUP BY column.
         /// </summary>
         /// <returns>The <see cref="HavingBuilder"/> instance.</returns>
-        public HavingBuilder UseHaving()
+        internal HavingBuilder UseHaving()
         {
             return _havingBuilder;
         }
@@ -325,7 +402,7 @@ namespace Jattac.Libraries.QBuilder
                 throw new InvalidOperationException("Build() has already been called on this QBuilder instance. Create a new QBuilder to build a new query.");
             }
             _isBuilt = true;
-            DataValidator.EvaluateImmediate(string.IsNullOrEmpty(FirstTableName), "There are no tables queued for data querying. Nothing to return");
+            Guard.Against(string.IsNullOrEmpty(FirstTableName), "There are no tables queued for data querying. Nothing to return");
 
             var query = UseSelector().Build()
                 + UseJoiner().Build()
@@ -353,6 +430,17 @@ namespace Jattac.Libraries.QBuilder
             }
             builtQuery.ParameterizedSql = Build();
             return builtQuery;
+        }
+
+        /// <summary>
+        /// Builds parameterized SQL and invokes <paramref name="logSql"/> with the generated SQL string.
+        /// Pass any logging action — no external logging dependency is introduced.
+        /// </summary>
+        public BuiltQuery BuildWithParameters(Action<string> logSql)
+        {
+            var result = BuildWithParameters();
+            logSql?.Invoke(result.ParameterizedSql);
+            return result;
         }
 
 
@@ -451,7 +539,7 @@ namespace Jattac.Libraries.QBuilder
                     _aliasTableName = string.Empty;
                     _groupBuilder = null;
                     _suffix = string.Empty;
-                    TableNameResolver = null;
+                    _options = null;
                     TableNameAliaser = null;
                 }
 

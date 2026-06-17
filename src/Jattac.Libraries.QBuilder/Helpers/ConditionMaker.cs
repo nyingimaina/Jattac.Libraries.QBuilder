@@ -1,7 +1,6 @@
 using System;
 namespace Jattac.Libraries.QBuilder.Helpers
 {
-    using Rocket.Libraries.Validation.Services;
     using System.Globalization;
 
     internal class ConditionMaker
@@ -30,7 +29,7 @@ namespace Jattac.Libraries.QBuilder.Helpers
         {
             if (!IsNoValueOperator(op))
             {
-                new DataValidator().EvaluateImmediate(value == null, "No value was provided for filter");
+                Guard.NotNull(value, "No value was provided for filter");
             }
 
             var sqlOperator = GetSqlOperator(op);
@@ -53,7 +52,7 @@ namespace Jattac.Libraries.QBuilder.Helpers
                 var parameterName = GetParameterName(field, builtQuery);
                 condition = $" {sqlOperator} {string.Format(CultureInfo.InvariantCulture, conditionTemplate, parameterName)}";
 
-                Func<string> getEffectiveValue = () =>
+                Func<object> getEffectiveValue = () =>
                 {
                     value = value ?? string.Empty;
                     switch (op)
@@ -65,7 +64,7 @@ namespace Jattac.Libraries.QBuilder.Helpers
                         case FilterOperator.EndsWith:
                             return $"%{value}";
                         default:
-                            return value.ToString();
+                            return value; // raw value — lets ADO.NET/Dapper handle type conversion
                     }
                 };
 
@@ -80,10 +79,8 @@ namespace Jattac.Libraries.QBuilder.Helpers
         /// </summary>
         public string GetBetweenCondition(string field, bool negate, object from, object to, BuiltQuery builtQuery = null)
         {
-            new DataValidator()
-                .AddFailureCondition(from == null, "No 'from' value provided for BETWEEN filter", false)
-                .AddFailureCondition(to == null, "No 'to' value provided for BETWEEN filter", false)
-                .ThrowExceptionOnInvalidRules();
+            Guard.NotNull(from, "No 'from' value provided for BETWEEN filter");
+            Guard.NotNull(to, "No 'to' value provided for BETWEEN filter");
 
             var keyword = negate ? "Not Between" : "Between";
 
@@ -117,7 +114,7 @@ namespace Jattac.Libraries.QBuilder.Helpers
             switch (op)
             {
                 default:
-                    new DataValidator().EvaluateImmediate(true, $"Unknown operator '{op}'. Cannot build filter");
+                    Guard.Against(true, $"Unknown operator '{op}'. Cannot build filter");
                     return string.Empty;
 
                 case FilterOperator.LessThan:
@@ -144,7 +141,7 @@ namespace Jattac.Libraries.QBuilder.Helpers
             switch (op)
             {
                 default:
-                    new DataValidator().EvaluateImmediate(true, $"Unknown operator '{op}'. Cannot build filter");
+                    Guard.Against(true, $"Unknown operator '{op}'. Cannot build filter");
                     return string.Empty;
 
                 case FilterOperator.LessThan:            return "<";

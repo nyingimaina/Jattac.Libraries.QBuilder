@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <Version>7.0.0-rc2</Version>
+    <Version>9.1.1</Version>
     <PackageId>Jattac.Libraries.QBuilder</PackageId>
     <Product>Jattac.Libraries.QBuilder</Product>
     <AssemblyName>Jattac.Libraries.QBuilder</AssemblyName>
@@ -21,10 +21,10 @@
     <PackageProjectUrl>https://github.com/nyingimaina/Jattac.Libraries.QBuilder</PackageProjectUrl>
     <Authors>Nyingi Maina</Authors>
     <Company>Jattac</Company>
-    <PackageDescription>A fully-fledged C# dialect of SQL — a fluent, type-safe query builder for .NET covering every ANSI SQL clause plus SQL Server and MariaDB/MySQL dialects. Produces parameterized SQL strings you execute with Dapper, ADO.NET, or any micro-ORM. Zero boilerplate, injection-safe, 97 unit tests.</PackageDescription>
-    <PackageTags>sql;query-builder;dapper;fluent;orm;linq;select;join;where;cte;paging;parameterized;mysql;sqlserver;mariadb</PackageTags>
+    <PackageDescription>A fully-fledged C# dialect of SQL — fluent, type-safe SELECT and DML (INSERT, UPDATE, DELETE) for .NET 6+. Covers every ANSI SQL clause with full identifier quoting for SQL Server, MySQL/MariaDB, SQLite, PostgreSQL, and ANSI Generic dialects. Configure once at startup via QBuilderConfig, use named configs for multiple databases. Produces parameterized SQL strings you execute with Dapper, ADO.NET, or any micro-ORM. Zero boilerplate, injection-safe, 174 tests.</PackageDescription>
+    <PackageTags>sql;query-builder;dapper;fluent;orm;linq;select;join;where;cte;paging;parameterized;mysql;mariadb;sqlserver;mssql;sqlite;postgres;postgresql;dialect</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v7.0.0-rc2 — Fix backward compatibility regression: UseTableBoundSelector&lt;T&gt;().Select(expr, alias) was treating the alias as a table name prefix instead of a column alias, producing broken SQL (e.g. Alias.Column instead of Table.Column AS Alias). Namespace-only migration from Rocket.Libraries.QBuilder now works correctly at runtime.</PackageReleaseNotes>
+    <PackageReleaseNotes>v9.1.1 — Documentation. Added full docs for derived table queries: UseDerivedTableSelector, UseJoiner().UseDerivedTableJoiner&lt;T&gt;() (InnerJoin/LeftJoin/RightJoin/FullJoin against subqueries), and AggregateRowQuerierBuilder&lt;T&gt; (latest-row-per-group helper). Fixed Gaps section — removed false "gap" for UseDerivedTableSelector (it is fully supported). No code changes.</PackageReleaseNotes>
     <Copyright>Copyright © 2024 Nyingi Maina</Copyright>
   </PropertyGroup>
 
@@ -33,7 +33,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Rocket.Libraries.Validation" Version="2.0.0-beta05" />
     <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers" Version="2.9.6">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>

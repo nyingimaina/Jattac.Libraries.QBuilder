@@ -4,8 +4,6 @@ namespace Jattac.Libraries.QBuilder.Builders.Paging
     using System.Collections.Generic;
     using System.Text;
     using Jattac.Libraries.QBuilder.Models;
-    using Rocket.Libraries.Validation.Services;
-
     public static class PageRangeCalculator
     {
         public static PageRange GetPageRange(byte absoluteFirstRecordIndex, uint page, ushort pageSize)

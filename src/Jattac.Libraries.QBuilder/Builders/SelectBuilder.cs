@@ -4,8 +4,8 @@ namespace Jattac.Libraries.QBuilder.Builders
     using System.Collections.Generic;
     using System.Linq;
     using System.Linq.Expressions;
+    using Jattac.Libraries.QBuilder.Enums;
     using Jattac.Libraries.QBuilder.Helpers;
-    using Rocket.Libraries.Validation.Services;
 
     public class SelectBuilder : BuilderBase
     {
@@ -111,7 +111,7 @@ namespace Jattac.Libraries.QBuilder.Builders
 
         internal string Build()
         {
-            new DataValidator().EvaluateImmediate(_selects.Count == 0, "There are no fields queued for selection. Nothing to return");
+            Guard.Against(_selects.Count == 0, "There are no fields queued for selection. Nothing to return");
 
             var selects = "Select ";
             if (_top.HasValue)
@@ -129,18 +129,30 @@ namespace Jattac.Libraries.QBuilder.Builders
                 selects += $" {_selectPrefix}";
             }
 
+            var dialect = QBuilder.Dialect;
             foreach (var selectDescription in _selects)
             {
-                new DataValidator().EvaluateImmediate(TableNotKnown(selectDescription.Table), $"Table '{selectDescription.Table}' has not been queued as a datasource. Cannot show fields from it");
+                Guard.Against(TableNotKnown(selectDescription.Table), $"Table '{selectDescription.Table}' has not been queued as a datasource. Cannot show fields from it");
                 var tableName = GetTableName(selectDescription);
 
-                var qualifiedField = selectDescription.QualifyFieldWithTableName ? $"{tableName}.{selectDescription.Field}" : selectDescription.Field;
+                string qualifiedField;
+                if (selectDescription.QualifyFieldWithTableName)
+                {
+                    var qAlias = IdentifierQuoter.QuoteIdentifier(tableName, dialect);
+                    var qField = IdentifierQuoter.QuoteIdentifier(selectDescription.Field, dialect);
+                    qualifiedField = $"{qAlias}.{qField}";
+                }
+                else
+                {
+                    qualifiedField = selectDescription.Field;
+                }
+
                 var finalField = GetAggregatedFieldIfRequired(qualifiedField, selectDescription.AggregateFunction);
                 selects += $"{Environment.NewLine}{finalField}";
                 var hasAlias = !string.IsNullOrEmpty(selectDescription.FieldAlias);
                 if (hasAlias)
                 {
-                    selects += $" as {selectDescription.FieldAlias}";
+                    selects += $" as {IdentifierQuoter.QuoteIdentifier(selectDescription.FieldAlias, dialect)}";
                 }
 
                 selects += ",";
@@ -150,7 +162,9 @@ namespace Jattac.Libraries.QBuilder.Builders
             var joiner = QBuilder.UseJoiner();
             var firstTableAlias = (joiner.JoinsExist ? joiner.FirstTableAlias : null)
                 ?? QBuilder.TableNameAliaser.GetTableAlias(firstTableName);
-            selects = selects.Substring(0, selects.Length - 1) + $" From {firstTableName} " + firstTableAlias;
+            var quotedFirstTable = IdentifierQuoter.QuoteTable(firstTableName, dialect);
+            var quotedFirstAlias = IdentifierQuoter.QuoteIdentifier(firstTableAlias, dialect);
+            selects = selects.Substring(0, selects.Length - 1) + $" From {quotedFirstTable} " + quotedFirstAlias;
             _selects = new List<SelectDescription>();
             return selects + Environment.NewLine;
         }

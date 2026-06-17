@@ -9,16 +9,15 @@ using Xunit;
 namespace Jattac.QBuilderTests
 {
     /// <summary>
-    /// Tests for the zero-boilerplate fluent extension API introduced in v7.0.
+    /// Tests for the zero-boilerplate fluent TableBound* API introduced in v8.0.
     /// Every test asserts on the generated SQL string to document exact output.
     /// </summary>
     public class FluentApiTests
     {
-        // ── helpers ────────────────────────────────────────────────────────────
         private static string Normalize(string sql) =>
             sql.Replace("\r\n", "\n").Replace("\r", "\n").Trim();
 
-        // ── Q.Build factory ───────────────────────────────────────────────────
+        // ── Q.New factory ─────────────────────────────────────────────────────
 
         [Fact]
         public void QBuildDefaultParameterizes()
@@ -47,14 +46,14 @@ namespace Jattac.QBuilderTests
             Assert.Contains("dbo.User", sql);
         }
 
-        // ── SELECT extensions ─────────────────────────────────────────────────
+        // ── SELECT ────────────────────────────────────────────────────────────
 
         [Fact]
         public void SelectLambdaNoAlias()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, Guid>(u => u.Id)
-                .Build();
+                .UseTableBoundSelector<User>().Column(u => u.Id)
+                .Then().Build();
             Assert.Contains("tUser.Id", Normalize(sql));
         }
 
@@ -62,8 +61,8 @@ namespace Jattac.QBuilderTests
         public void SelectLambdaWithAlias()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, string>(u => u.Name, alias: "UserName")
-                .Build();
+                .UseTableBoundSelector<User>().Column(u => u.Name, "UserName")
+                .Then().Build();
             Assert.Contains("as UserName", Normalize(sql));
         }
 
@@ -71,9 +70,8 @@ namespace Jattac.QBuilderTests
         public void SelectDistinct()
         {
             var sql = Q.New(parameterize: false)
-                .Distinct()
-                .Select<User, string>(u => u.Name)
-                .Build();
+                .UseTableBoundSelector<User>().Distinct().Column(u => u.Name)
+                .Then().Build();
             Assert.Contains("Distinct", sql);
         }
 
@@ -81,9 +79,8 @@ namespace Jattac.QBuilderTests
         public void SelectTop()
         {
             var sql = Q.New(parameterize: false)
-                .Top(10)
-                .Select<User, string>(u => u.Name)
-                .Build();
+                .UseTableBoundSelector<User>().Top(10).Column(u => u.Name)
+                .Then().Build();
             Assert.Contains("Top 10", sql);
         }
 
@@ -91,8 +88,8 @@ namespace Jattac.QBuilderTests
         public void AggregateSum()
         {
             var sql = Q.New(parameterize: false)
-                .Aggregate<Order, decimal>(o => o.Amount, "Total", AggregateFunction.Sum)
-                .Build();
+                .UseTableBoundSelector<Order>().Aggregate(o => o.Amount, "Total", AggregateFunction.Sum)
+                .Then().Build();
             Assert.Contains("Sum(", sql);
             Assert.Contains("as Total", sql);
         }
@@ -101,8 +98,8 @@ namespace Jattac.QBuilderTests
         public void AggregateCount()
         {
             var sql = Q.New(parameterize: false)
-                .Aggregate<Order, Guid>(o => o.Id, "Cnt", AggregateFunction.Count)
-                .Build();
+                .UseTableBoundSelector<Order>().Aggregate(o => o.Id, "Cnt", AggregateFunction.Count)
+                .Then().Build();
             Assert.Contains("Count(", sql);
         }
 
@@ -114,23 +111,25 @@ namespace Jattac.QBuilderTests
                 .Else("Other");
 
             var sql = Q.New(parameterize: false)
-                .Select<Order, Guid>(o => o.Id)
-                .SelectCaseWhen(caseExpr, alias: "StatusLabel")
-                .Build();
+                .UseTableBoundSelector<Order>()
+                    .Column(o => o.Id)
+                    .CaseWhen(caseExpr, "StatusLabel")
+                .Then().Build();
 
             Assert.Contains("Case When", sql);
             Assert.Contains("as StatusLabel", sql);
         }
 
-        // ── JOIN extensions ───────────────────────────────────────────────────
+        // ── JOIN ──────────────────────────────────────────────────────────────
 
         [Fact]
         public void InnerJoinExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, Guid>(u => u.Id)
-                .Select<Order, decimal>(o => o.Amount)
-                .InnerJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
+                .UseTableBoundSelector<User>().Column(u => u.Id).Then()
+                .UseTableBoundSelector<Order>().Column(o => o.Amount).Then()
+                .UseTableBoundJoinBuilder<User, Order>()
+                    .InnerJoin(u => u.Id, o => o.UserId)
                 .Build();
 
             Assert.Contains("join Order", Normalize(sql));
@@ -141,9 +140,10 @@ namespace Jattac.QBuilderTests
         public void LeftJoinExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, Guid>(u => u.Id)
-                .Select<Order, decimal>(o => o.Amount)
-                .LeftJoin<User, Order, Guid, Guid>(u => u.Id, o => o.UserId)
+                .UseTableBoundSelector<User>().Column(u => u.Id).Then()
+                .UseTableBoundSelector<Order>().Column(o => o.Amount).Then()
+                .UseTableBoundJoinBuilder<User, Order>()
+                    .LeftJoin(u => u.Id, o => o.UserId)
                 .Build();
 
             Assert.Contains("Left join", sql);
@@ -153,23 +153,23 @@ namespace Jattac.QBuilderTests
         public void CrossJoinExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, Guid>(u => u.Id)
-                .Select<Product, string>(p => p.Name)
-                .CrossJoin<User, Product>()
+                .UseTableBoundSelector<User>().Column(u => u.Id).Then()
+                .UseTableBoundSelector<Product>().Column(p => p.Name).Then()
+                .UseJoiner().CrossJoin<User, Product>().Then()
                 .Build();
 
             Assert.Contains("Cross join", sql);
         }
 
-        // ── WHERE extensions ──────────────────────────────────────────────────
+        // ── WHERE ─────────────────────────────────────────────────────────────
 
         [Fact]
         public void WhereExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, string>(u => u.Name)
-                .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
-                .Build();
+                .UseTableBoundSelector<User>().Column(u => u.Name).Then()
+                .UseTableBoundFilter<User>().WhereEqualTo(u => u.Name, "Alice")
+                .Then().Build();
 
             Assert.Contains("tUser.Name", sql);
             Assert.Contains("= 'Alice'", sql);
@@ -179,10 +179,11 @@ namespace Jattac.QBuilderTests
         public void AndWhereExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, string>(u => u.Name)
-                .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
-                .AndWhere<User, string>(u => u.Name, FilterOperator.NotEqualTo, "Bob")
-                .Build();
+                .UseTableBoundSelector<User>().Column(u => u.Name).Then()
+                .UseTableBoundFilter<User>()
+                    .WhereEqualTo(u => u.Name, "Alice")
+                    .AndWhereNotEqualTo(u => u.Name, "Bob")
+                .Then().Build();
 
             Assert.Contains("And", sql);
             Assert.Contains("<>", sql);
@@ -192,10 +193,11 @@ namespace Jattac.QBuilderTests
         public void OrWhereExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, string>(u => u.Name)
-                .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
-                .OrWhere<User, string>(u => u.Name, FilterOperator.EqualTo, "Bob")
-                .Build();
+                .UseTableBoundSelector<User>().Column(u => u.Name).Then()
+                .UseTableBoundFilter<User>()
+                    .WhereEqualTo(u => u.Name, "Alice")
+                    .OrWhereEqualTo(u => u.Name, "Bob")
+                .Then().Build();
 
             Assert.Contains("Or", sql);
         }
@@ -204,9 +206,9 @@ namespace Jattac.QBuilderTests
         public void WhereIsNullExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<Order, Guid>(o => o.Id)
-                .WhereIsNull<Order, DateTime?>(o => o.DeletedAt)
-                .Build();
+                .UseTableBoundSelector<Order>().Column(o => o.Id).Then()
+                .UseTableBoundFilter<Order>().WhereIsNull(o => o.DeletedAt)
+                .Then().Build();
 
             Assert.Contains("IS NULL", sql);
         }
@@ -215,10 +217,11 @@ namespace Jattac.QBuilderTests
         public void AndWhereIsNullExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<Order, Guid>(o => o.Id)
-                .Where<Order, string>(o => o.Status, FilterOperator.EqualTo, "active")
-                .AndWhereIsNull<Order, DateTime?>(o => o.DeletedAt)
-                .Build();
+                .UseTableBoundSelector<Order>().Column(o => o.Id).Then()
+                .UseTableBoundFilter<Order>()
+                    .WhereEqualTo(o => o.Status, "active")
+                    .AndWhereIsNull(o => o.DeletedAt)
+                .Then().Build();
 
             Assert.Contains("IS NULL", sql);
             Assert.Contains("And", sql);
@@ -228,9 +231,9 @@ namespace Jattac.QBuilderTests
         public void WhereIsNotNullExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<Order, Guid>(o => o.Id)
-                .WhereIsNotNull<Order, DateTime?>(o => o.DeletedAt)
-                .Build();
+                .UseTableBoundSelector<Order>().Column(o => o.Id).Then()
+                .UseTableBoundFilter<Order>().WhereIsNotNull(o => o.DeletedAt)
+                .Then().Build();
 
             Assert.Contains("IS NOT NULL", sql);
         }
@@ -239,9 +242,9 @@ namespace Jattac.QBuilderTests
         public void WhereBetweenExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<Order, decimal>(o => o.Amount)
-                .WhereBetween<Order, decimal>(o => o.Amount, 10, 100)
-                .Build();
+                .UseTableBoundSelector<Order>().Column(o => o.Amount).Then()
+                .UseTableBoundFilter<Order>().WhereBetween(o => o.Amount, 10, 100)
+                .Then().Build();
 
             Assert.Contains("Between", sql);
             Assert.Contains("10", sql);
@@ -252,9 +255,9 @@ namespace Jattac.QBuilderTests
         public void WhereInExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<Order, string>(o => o.Status)
-                .WhereIn<Order, string, string>(o => o.Status, new[] { "new", "processing" })
-                .Build();
+                .UseTableBoundSelector<Order>().Column(o => o.Status).Then()
+                .UseTableBoundFilter<Order>().WhereIn<string, string>(o => o.Status, new[] { "new", "processing" })
+                .Then().Build();
 
             Assert.Contains("in", sql);
             Assert.Contains("new", sql);
@@ -264,9 +267,9 @@ namespace Jattac.QBuilderTests
         public void WhereNotInExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<Order, string>(o => o.Status)
-                .WhereNotIn<Order, string, string>(o => o.Status, new[] { "cancelled" })
-                .Build();
+                .UseTableBoundSelector<Order>().Column(o => o.Status).Then()
+                .UseTableBoundFilter<Order>().WhereNotIn<string, string>(o => o.Status, new[] { "cancelled" })
+                .Then().Build();
 
             Assert.Contains("not in", sql);
         }
@@ -275,12 +278,13 @@ namespace Jattac.QBuilderTests
         public void OpenGroupCloseGroupExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<Order, string>(o => o.Status)
-                .Where<Order, string>(o => o.Status, FilterOperator.EqualTo, "new")
-                .OpenGroup()
-                .OrWhere<Order, string>(o => o.Status, FilterOperator.EqualTo, "processing")
-                .CloseGroup()
-                .Build();
+                .UseTableBoundSelector<Order>().Column(o => o.Status).Then()
+                .UseTableBoundFilter<Order>()
+                    .WhereEqualTo(o => o.Status, "new")
+                    .OpenGroup()
+                    .OrWhereEqualTo(o => o.Status, "processing")
+                    .CloseGroup()
+                .Then().Build();
 
             Assert.Contains("(", sql);
             Assert.Contains(")", sql);
@@ -292,10 +296,10 @@ namespace Jattac.QBuilderTests
         public void GroupByAndHavingExtensions()
         {
             var sql = Q.New(parameterize: false)
-                .Aggregate<Order, decimal>(o => o.Amount, "Total", AggregateFunction.Sum)
-                .GroupBy<Order, Guid>(o => o.UserId)
-                .Having<Order, decimal>(o => o.Amount, FilterOperator.GreaterThan, 100)
-                .Build();
+                .UseTableBoundSelector<Order>().Aggregate(o => o.Amount, "Total", AggregateFunction.Sum).Then()
+                .UseTableBoundGrouper<Order>().GroupBy(o => o.UserId)
+                .UseTableBoundHaving<Order>().HavingGreaterThan(o => o.Amount, 100)
+                .Then().Build();
 
             Assert.Contains("Group By", sql);
             Assert.Contains("Having", sql);
@@ -308,9 +312,9 @@ namespace Jattac.QBuilderTests
         public void OrderByExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, string>(u => u.Name)
-                .OrderBy<User, string>(u => u.Name)
-                .Build();
+                .UseTableBoundSelector<User>().Column(u => u.Name).Then()
+                .UseTableBoundOrderBy<User>().Ascending(u => u.Name)
+                .Then().Build();
 
             Assert.Contains("Order By tUser.Name Asc", sql);
         }
@@ -319,9 +323,9 @@ namespace Jattac.QBuilderTests
         public void OrderByDescendingExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, string>(u => u.Name)
-                .OrderByDescending<User, string>(u => u.Name)
-                .Build();
+                .UseTableBoundSelector<User>().Column(u => u.Name).Then()
+                .UseTableBoundOrderBy<User>().Descending(u => u.Name)
+                .Then().Build();
 
             Assert.Contains("tUser.Name Desc", sql);
         }
@@ -330,10 +334,11 @@ namespace Jattac.QBuilderTests
         public void ThenByExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, string>(u => u.Name)
-                .OrderBy<User, Guid>(u => u.Id)
-                .ThenBy<User, string>(u => u.Name)
-                .Build();
+                .UseTableBoundSelector<User>().Column(u => u.Name).Then()
+                .UseTableBoundOrderBy<User>()
+                    .Ascending(u => u.Id)
+                    .ThenAscending(u => u.Name)
+                .Then().Build();
 
             Assert.Contains("tUser.Id Asc", sql);
             Assert.Contains("tUser.Name Asc", sql);
@@ -345,8 +350,8 @@ namespace Jattac.QBuilderTests
         public void PageSqlServerExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, Guid>(u => u.Id)
-                .PageSqlServer<User, string>(u => u.Name, page: 1, pageSize: 10)
+                .UseTableBoundSelector<User>().Column(u => u.Id).Then()
+                .UseSqlServerPagingBuilder<User>().PageBy(u => u.Name, page: 1, pageSize: 10)
                 .Build();
 
             Assert.Contains("ROW_NUMBER()", sql);
@@ -357,22 +362,22 @@ namespace Jattac.QBuilderTests
         public void PageOffsetFetchExtension()
         {
             var sql = Q.New(parameterize: false)
-                .Select<User, Guid>(u => u.Id)
-                .PageOffsetFetch<User, string>(u => u.Name, page: 2, pageSize: 10)
+                .UseTableBoundSelector<User>().Column(u => u.Id).Then()
+                .UseOffsetFetchPagingBuilder<User>().PageBy(u => u.Name, page: 2, pageSize: 10)
                 .Build();
 
             Assert.Contains("Offset 10 Rows Fetch Next 10 Rows Only", sql);
         }
 
-        // ── parameterized WHERE via extensions ────────────────────────────────
+        // ── parameterized WHERE ───────────────────────────────────────────────
 
         [Fact]
         public void WhereExtensionParameterized()
         {
             var result = Q.New(parameterize: true)
-                .Select<User, string>(u => u.Name)
-                .Where<User, string>(u => u.Name, FilterOperator.EqualTo, "Alice")
-                .BuildWithParameters();
+                .UseTableBoundSelector<User>().Column(u => u.Name).Then()
+                .UseTableBoundFilter<User>().WhereEqualTo(u => u.Name, "Alice")
+                .Then().BuildWithParameters();
 
             Assert.Single(result.Parameters);
             Assert.Equal("Alice", result.Parameters.Values.First().ToString());

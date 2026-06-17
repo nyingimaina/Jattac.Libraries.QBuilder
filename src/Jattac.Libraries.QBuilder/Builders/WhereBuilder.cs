@@ -3,6 +3,7 @@ namespace Jattac.Libraries.QBuilder.Builders
     using System.Collections.Generic;
     using System.Linq;
     using System;
+    using Jattac.Libraries.QBuilder.Enums;
     using Jattac.Libraries.QBuilder.Helpers;
     using Jattac.Libraries.QBuilder.Models;
 
@@ -10,7 +11,7 @@ namespace Jattac.Libraries.QBuilder.Builders
     /// Builds the WHERE (or HAVING) clause of a SQL query.
     /// Supports typed conditions, IN / NOT IN, IS NULL, BETWEEN, EXISTS, and nested parentheses.
     /// </summary>
-    public class WhereBuilder : BuilderBase
+    internal class WhereBuilder : BuilderBase
     {
         private List<WhereDescription> _wheres = new List<WhereDescription>();
 
@@ -77,7 +78,7 @@ namespace Jattac.Libraries.QBuilder.Builders
         public WhereBuilder CloseParentheses()
         {
             var noOpenParentheses = CurrentParentheses == null || CurrentParentheses.Id == _implicitParentheses.Id;
-            DataValidator.EvaluateImmediate(noOpenParentheses, "There is currently no open parentheses. Nothing to close.");
+            Guard.Against(noOpenParentheses, "There is currently no open parentheses. Nothing to close.");
             CurrentParentheses.Closed = true;
             return this;
         }
@@ -118,9 +119,12 @@ namespace Jattac.Libraries.QBuilder.Builders
         public WhereConjunctionBuilder Where(Type tableType, string field, string condition, string tableAlias = null)
         {
             var alias = tableAlias ?? QBuilder.TableNameAliaser.GetTableAlias(QBuilder.TableNameResolver(tableType));
+            var dialect = QBuilder.Dialect;
+            var quotedAlias = IdentifierQuoter.QuoteIdentifier(alias, dialect);
+            var quotedField = IdentifierQuoter.QuoteIdentifier(field, dialect);
             _wheres.Add(new WhereDescription
             {
-                Clause = $"{alias}.{field} {condition}",
+                Clause = $"{quotedAlias}.{quotedField} {condition}",
                 Conjunction = _nextConjuntion,
                 ParenthesesId = CurrentParentheses.Id,
             });
@@ -346,11 +350,25 @@ namespace Jattac.Libraries.QBuilder.Builders
             _nextConjuntion = conjunction;
         }
 
+        /// <summary>Exposes the BuiltQuery for parameter injection from TableBoundWhereBuilder.</summary>
+        internal BuiltQuery BuiltQueryRef => builtQuery;
+
+        /// <summary>Adds a raw SQL fragment to the WHERE clause without the parameterized-mode guard.</summary>
+        internal void WhereExplicitlyRaw(string criteria)
+        {
+            _wheres.Add(new WhereDescription
+            {
+                Clause = criteria,
+                Conjunction = _nextConjuntion,
+                ParenthesesId = CurrentParentheses.Id,
+            });
+        }
+
         internal string Build()
         {
             var where = string.Empty;
             var unClosedParenthesesExists = CurrentParentheses != null && CurrentParentheses.Id != _implicitParentheses.Id;
-            DataValidator.EvaluateImmediate(unClosedParenthesesExists, "An unclosed parentheses was found. Please check your query.");
+            Guard.Against(unClosedParenthesesExists, "An unclosed parentheses was found. Please check your query.");
             var currentParenthesesId = _implicitParentheses.Id;
 
             foreach (var whereDescription in _wheres)

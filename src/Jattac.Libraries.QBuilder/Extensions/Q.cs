@@ -1,55 +1,64 @@
 namespace Jattac.Libraries.QBuilder
 {
     using System;
+    using Jattac.Libraries.QBuilder.Config;
 
     /// <summary>
     /// Static entry point for composing SQL queries with zero boilerplate.
+    /// Reads dialect and table-name resolver from <see cref="QBuilderConfig"/> — configure once at startup.
     /// </summary>
     /// <example>
     /// <code>
-    /// // Parameterized (recommended)
+    /// // Parameterized (recommended) — uses default config
     /// var result = Q.New()
-    ///     .Select((User u) => u.Id)
-    ///     .InnerJoin((User u) => u.Id, (Order o) => o.UserId)
-    ///     .Where((User u) => u.Active, FilterOperator.EqualTo, true)
-    ///     .OrderBy((User u) => u.Name)
+    ///     .UseTableBoundSelector&lt;User&gt;().Column(u => u.Id).Then()
     ///     .BuildWithParameters();
     ///
-    /// // Literal (no parameters)
-    /// var sql = Q.New(parameterize: false)
-    ///     .Select((User u) => u.Name)
-    ///     .Build();
+    /// // Named config
+    /// var q = Q.New("mysql");
+    ///
+    /// // Inline resolver (backward-compatible)
+    /// var q = Q.New(t => "dbo." + t.Name, parameterize: false);
     /// </code>
     /// </example>
     public static class Q
     {
         /// <summary>
-        /// Creates a new <see cref="QBuilder"/> with the default type-name resolver.
-        /// Table names are derived from the CLR type name (e.g. <c>User</c> → <c>User</c>).
+        /// Creates a new <see cref="QBuilder"/> using the default configuration set by
+        /// <see cref="QBuilderConfig.ConfigureDefault"/>. If no default has been configured,
+        /// uses <c>Dialect.None</c> and the CLR type name as the table name.
         /// </summary>
-        /// <param name="parameterize">
-        /// <c>true</c> (default) — values are bound as named parameters; call <see cref="QBuilder.BuildWithParameters"/> to retrieve the SQL and parameter dictionary.<br/>
-        /// <c>false</c> — values are inlined as literals; call <see cref="QBuilder.Build"/> to retrieve the SQL string.
-        /// </param>
-        /// <returns>A new <see cref="QBuilder"/> ready for chaining.</returns>
         public static QBuilder New(bool parameterize = true)
         {
-            return new QBuilder(parameterize);
+            return new QBuilder(QBuilderRegistry.GetDefault(), parameterize);
         }
 
         /// <summary>
-        /// Creates a new <see cref="QBuilder"/> with a custom table-name resolver.
-        /// Use when your table names differ from the CLR type names (e.g. plural names, schema prefixes).
+        /// Creates a new <see cref="QBuilder"/> using a named configuration registered via
+        /// <see cref="QBuilderConfig.Configure"/>.
         /// </summary>
-        /// <param name="tableNameResolver">
-        /// A function that maps a CLR type to its SQL table name,
-        /// e.g. <c>t => "dbo." + t.Name + "s"</c> maps <c>User</c> → <c>dbo.Users</c>.
-        /// </param>
-        /// <param name="parameterize">Whether to use parameterized queries (default <c>true</c>).</param>
-        /// <returns>A new <see cref="QBuilder"/> ready for chaining.</returns>
+        /// <exception cref="InvalidOperationException">Thrown if <paramref name="name"/> has not been registered.</exception>
+        public static QBuilder New(string name, bool parameterize = true)
+        {
+            return new QBuilder(QBuilderRegistry.Get(name), parameterize);
+        }
+
+        /// <summary>
+        /// Creates a new <see cref="QBuilder"/> with an inline table-name resolver.
+        /// Bypasses the config registry — useful for one-off custom resolvers or migration scenarios.
+        /// </summary>
         public static QBuilder New(Func<Type, string> tableNameResolver, bool parameterize = true)
         {
-            return new QBuilder(tableNameResolver, "t", parameterize);
+            return new QBuilder(new QBuilderOptions { TableNameResolver = tableNameResolver }, parameterize);
+        }
+
+        /// <summary>
+        /// Creates a new <see cref="QBuilder"/> directly from a <see cref="QBuilderOptions"/> instance.
+        /// Use when you build options programmatically without going through the registry.
+        /// </summary>
+        public static QBuilder New(QBuilderOptions options, bool parameterize = true)
+        {
+            return new QBuilder(options, parameterize);
         }
     }
 }

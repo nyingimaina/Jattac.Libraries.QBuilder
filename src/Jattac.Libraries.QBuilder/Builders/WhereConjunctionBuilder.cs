@@ -1,6 +1,6 @@
 namespace Jattac.Libraries.QBuilder.Builders
 {
-    public class WhereConjunctionBuilder : BuilderBase
+    internal class WhereConjunctionBuilder : BuilderBase
     {
         private readonly WhereBuilder _whereBuilder;
 
