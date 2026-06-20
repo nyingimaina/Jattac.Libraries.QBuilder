@@ -848,6 +848,31 @@ Anonymous objects work with `FromObject` — since they carry no attributes, all
 
 See [`docs/migration-v7-to-v8.md`](docs/migration-v7-to-v8.md) for full attribute reference, DB-generated key patterns, chunking guidance, and `WhereIn` for bulk delete.
 
+#### Inheritance and `new`-hidden properties
+
+`FromObject` reflects the full public property list of the runtime type, including inherited properties. When a derived class hides a base-class property with the `new` keyword, both declarations appear in the reflection output. QBuilder deduplicates by column name and always keeps the **most-derived** declaration, so `new`-shadowed properties behave exactly as you'd expect.
+
+```csharp
+public class EntityBase
+{
+    public int Deleted { get; set; }  // base declaration
+}
+
+public class Order : EntityBase
+{
+    [QIgnore]
+    public new int Deleted { get; set; }  // shadow with [QIgnore] → excluded from all SQL
+}
+```
+
+A common pattern when working with shared base classes from external libraries: re-declare the unwanted property in an intermediate base with `[QIgnore]` to suppress it globally across every derived model.
+
+```csharp
+// In your own ModelBase, suppress a property inherited from a NuGet base class:
+[QIgnore]
+public new bool HasNoId => base.HasNoId;
+```
+
 ---
 
 ### DML pitfalls and best practices

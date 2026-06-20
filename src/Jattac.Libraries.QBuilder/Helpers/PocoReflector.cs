@@ -97,15 +97,22 @@ namespace Jattac.Libraries.QBuilder.Helpers
         {
             var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             var descriptors = new List<PocoPropertyDescriptor>(props.Length);
+            // GetProperties returns most-derived declarations first. Tracking seen column
+            // names drops shadowed base-class properties (declared with 'new') that would
+            // otherwise appear twice and produce a duplicate-column SQL error.
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var prop in props)
             {
                 if (!prop.CanRead) continue;
+                if (prop.GetIndexParameters().Length > 0) continue;
 
                 var isIgnored = prop.GetCustomAttribute<QIgnoreAttribute>() != null;
                 var isKey = prop.GetCustomAttribute<QKeyAttribute>() != null;
                 var colAttr = prop.GetCustomAttribute<QColumnAttribute>();
                 var colName = colAttr != null ? colAttr.Name : prop.Name;
+
+                if (!seen.Add(colName)) continue;
 
                 // Capture prop in a local variable to avoid closure-capture-loop bug.
                 var capturedProp = prop;
