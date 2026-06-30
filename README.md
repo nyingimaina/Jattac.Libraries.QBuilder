@@ -445,6 +445,21 @@ Available: `Having/AndHaving/OrHaving` + `EqualTo`, `NotEqualTo`, `GreaterThan`,
 .Then()
 ```
 
+`T` does not have to be the root table — you can sort by any joined table's column using the same API:
+
+```csharp
+// Sort by a column from a joined table
+Q.New()
+    .UseTableBoundSelector<Item>().Column(i => i.Id).Then()
+    .UseTableBoundJoinBuilder<ViewItemPurchaseSummary, Item>()
+        .InnerJoin(v => v.ItemId, i => i.Id)
+    .UseTableBoundOrderBy<ViewItemPurchaseSummary>()
+        .Descending(v => v.LastTransactionDate)
+    .Then()
+    .Build();
+// → ORDER BY tViewItemPurchaseSummary.LastTransactionDate Desc
+```
+
 ---
 
 ## PAGING

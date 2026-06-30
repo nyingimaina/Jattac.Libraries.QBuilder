@@ -344,6 +344,37 @@ namespace Jattac.QBuilderTests
             Assert.Contains("tUser.Name Asc", sql);
         }
 
+        [Fact]
+        public void OrderByDescending_OnJoinedTable_UsesCorrectAlias()
+        {
+            var sql = Q.New(parameterize: false)
+                .UseTableBoundSelector<User>().Column(u => u.Id).Then()
+                .UseTableBoundSelector<Order>().Column(o => o.Amount).Then()
+                .UseTableBoundJoinBuilder<User, Order>()
+                    .InnerJoin(u => u.Id, o => o.UserId)
+                .UseTableBoundOrderBy<Order>().Descending(o => o.Amount)
+                .Then().Build();
+
+            Assert.Contains("tOrder.Amount Desc", sql);
+        }
+
+        [Fact]
+        public void MultiColumnOrderBy_AcrossJoinedTables_BothAliasesCorrect()
+        {
+            var sql = Q.New(parameterize: false)
+                .UseTableBoundSelector<User>().Column(u => u.Id).Then()
+                .UseTableBoundSelector<Order>().Column(o => o.Amount).Then()
+                .UseTableBoundJoinBuilder<User, Order>()
+                    .InnerJoin(u => u.Id, o => o.UserId)
+                .UseTableBoundOrderBy<Order>()
+                    .Descending(o => o.Amount)
+                    .ThenAscending(o => o.Status)
+                .Then().Build();
+
+            Assert.Contains("tOrder.Amount Desc", sql);
+            Assert.Contains("tOrder.Status Asc", sql);
+        }
+
         // ── PAGING ────────────────────────────────────────────────────────────
 
         [Fact]
